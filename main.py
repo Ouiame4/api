@@ -88,14 +88,14 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
     sentiments_auteurs_b64 = fig_to_base64(fig3)
     plt.close(fig3)
 
-    # tableau brut (pas stylisé)
+    # tableau 
     top_table = (
         df['authorName']
         .value_counts()
         .reset_index()
         .rename(columns={'index': 'Auteur', 'authorName': 'Mentions'})
         .head(10)
-        .to_html(index=False, border=1)
+        .to_html(index=False, classes="table table-striped", border=0)
     )
 
     html_report = f"""<!DOCTYPE html>
@@ -131,7 +131,7 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
     <h2>Top 10 Auteurs les plus actifs</h2>
     {top_table}
 
-    <p style="font-size: 12px; color: #999;">Généré automatiquement avec FastAPI</p>
+    
 </body>
 </html>"""
 
