@@ -8,7 +8,7 @@ from io import BytesIO
 import base64
 import os
 
-app = FastAPI(title="API Analyse Veille Médiatique")
+app = FastAPI(title="API Analyse Veille Médiatique (Render + Rapport)")
 
 app.add_middleware(
     CORSMiddleware,
