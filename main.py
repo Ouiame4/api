@@ -91,7 +91,7 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
         df['authorName']
         .value_counts()
         .reset_index()
-        .rename(columns={'index': 'Mentions', 'authorName': 'count'})
+        .rename(columns={'index': 'Auteur', 'authorName': 'Articles' })
         .head(10)
         .to_html(index=False, border=1, classes="styled-table")
     )
@@ -141,15 +141,12 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
 
     <h2>Évolution des mentions</h2>
     <img src="data:image/png;base64,{evolution_mentions_b64}" width="700"/>
-    <p><em>Ce graphique montre comment le nombre d’articles évolue dans le temps. Il permet d’identifier les périodes de forte ou faible activité médiatique.</em></p>
 
     <h2>Répartition globale des sentiments</h2>
     <img src="data:image/png;base64,{sentiments_global_b64}" width="600"/>
-    <p><em>Ce diagramme montre la tonalité dominante des articles. Il aide à évaluer si la perception est globalement positive, neutre ou négative.</em></p>
 
     <h2>Répartition des sentiments par auteur</h2>
     <img src="data:image/png;base64,{sentiments_auteurs_b64}" width="700"/>
-    <p><em>Ce graphique empilé indique la contribution des principaux auteurs et la tonalité qu’ils emploient dans leurs articles.</em></p>
 
     <h2>Top 10 Auteurs les plus actifs</h2>
     {top_table}
