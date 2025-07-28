@@ -91,7 +91,7 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
         df['authorName']
         .value_counts()
         .reset_index()
-        .rename(columns={'index': 'Auteur', 'authorName': 'Articles' })
+        .rename(columns={'index': 'count', 'authorName': 'Auteur' })
         .head(10)
         .to_html(index=False, border=1, classes="styled-table")
     )
