@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -9,7 +8,7 @@ from io import BytesIO
 import base64
 import os
 
-app = FastAPI(title="API Analyse Veille Médiatique (Render + Rapport)")
+app = FastAPI(title="API Analyse Veille Médiatique")
 
 app.add_middleware(
     CORSMiddleware,
@@ -88,14 +87,13 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
     sentiments_auteurs_b64 = fig_to_base64(fig3)
     plt.close(fig3)
 
-    # tableau 
     top_table = (
         df['authorName']
         .value_counts()
         .reset_index()
-        .rename(columns={'index': 'Auteur', 'authorName': 'Mentions'})
+        .rename(columns={'index': 'Mentions', 'authorName': 'count'})
         .head(10)
-        .to_html(index=False, classes="table table-striped", border=0)
+        .to_html(index=False, border=1, classes="styled-table")
     )
 
     html_report = f"""<!DOCTYPE html>
@@ -103,13 +101,35 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
 <head>
     <meta charset='UTF-8'>
     <title>Rapport de Veille Médiatique</title>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }}
+        .styled-table {{
+            border-collapse: collapse;
+            margin: 25px 0;
+            font-size: 16px;
+            width: 60%;
+            border: 1px solid #dddddd;
+        }}
+        .styled-table th, .styled-table td {{
+            padding: 10px 15px;
+            text-align: left;
+            border: 1px solid #dddddd;
+        }}
+        .styled-table thead th {{
+            background-color: #f3f3f3;
+            font-weight: bold;
+        }}
+    </style>
 </head>
 <body>
     <h1>📊 Rapport d'Analyse de Veille Médiatique</h1>
 
     <p>
-        Ce rapport présente une analyse des articles collectés, avec des indicateurs de mentions,
-        la répartition des sentiments exprimés et les auteurs les plus actifs.
+        Ce rapport présente une analyse des articles collectés. Il fournit des indicateurs de mentions,
+        la répartition des sentiments exprimés, et une synthèse des auteurs les plus actifs.
     </p>
 
     <ul>
@@ -121,12 +141,15 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
 
     <h2>Évolution des mentions</h2>
     <img src="data:image/png;base64,{evolution_mentions_b64}" width="700"/>
+    <p><em>Ce graphique montre comment le nombre d’articles évolue dans le temps. Il permet d’identifier les périodes de forte ou faible activité médiatique.</em></p>
 
     <h2>Répartition globale des sentiments</h2>
     <img src="data:image/png;base64,{sentiments_global_b64}" width="600"/>
+    <p><em>Ce diagramme montre la tonalité dominante des articles. Il aide à évaluer si la perception est globalement positive, neutre ou négative.</em></p>
 
     <h2>Répartition des sentiments par auteur</h2>
     <img src="data:image/png;base64,{sentiments_auteurs_b64}" width="700"/>
+    <p><em>Ce graphique empilé indique la contribution des principaux auteurs et la tonalité qu’ils emploient dans leurs articles.</em></p>
 
     <h2>Top 10 Auteurs les plus actifs</h2>
     {top_table}
