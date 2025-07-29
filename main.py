@@ -129,11 +129,21 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
 </head>
 <body>
     <h1>📊 Rapport d'Analyse de Veille Médiatique</h1>
-
-    <p>
-        Ce rapport présente une analyse des articles bruts. Il applique un nettoyage automatique
-        puis fournit des indicateurs clés, une répartition des sentiments, et les auteurs les plus actifs.
+    <p style="font-size: 16px; line-height: 1.6;">
+        Ce rapport de veille médiatique présente une analyse approfondie des articles publiés autour d'un sujet d’actualité.
+        Il a pour objectif de fournir aux décideurs une vision claire et synthétique des mentions, du ton général (sentiment), 
+        ainsi que de l’activité des sources les plus influentes.
     </p>
+    <p style="font-size: 16px; line-height: 1.6;">
+        À travers des indicateurs clés et des visualisations intuitives, ce rapport permet d’identifier les tendances temporelles, 
+        la perception médiatique (positive, négative ou neutre), ainsi que les auteurs ou plateformes ayant le plus contribué 
+        à la diffusion des informations.
+    </p>
+    <p style="font-size: 16px; line-height: 1.6;">
+        Cette analyse vise à soutenir la prise de décision stratégique, la compréhension de l’image publique,
+        et la détection rapide de signaux faibles ou d’évolutions notables dans le discours médiatique.
+    </p>
+
 
     <ul>
         <li><strong>Mentions totales :</strong> {kpis['total_mentions']}</li>
