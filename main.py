@@ -8,7 +8,7 @@ from io import BytesIO
 import base64
 import os
 
-app = FastAPI(title="API Analyse Veille Médiatique (Render + Rapport)")
+app = FastAPI(title="API Analyse Veille Médiatique ")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,8 +30,20 @@ def fig_to_base64(fig):
 async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Par mois")):
     df = pd.read_csv(file.file)
 
+    # 🔹 Nettoyage automatique
     df['articleCreatedDate'] = pd.to_datetime(df['articleCreatedDate'], errors='coerce')
-    df['sentimentHumanReadable'] = df['sentimentHumanReadable'].astype(str).str.strip().str.lower()
+    cols_to_drop = [
+        'articleJSON', 'mainCategoryID', 'processingCost', 'publisher',
+        'totalTokens', 'outputTokens', 'inputTokens',
+        'videoType', 'videoURL',
+        'typesenseID', 'typesenseCollection', '__v'
+    ] + [f'keywords[{i}]' for i in range(24) if f'keywords[{i}]' in df.columns]
+    df.drop(columns=cols_to_drop, inplace=True, errors='ignore')
+    df.dropna(subset=['articleCreatedDate'], inplace=True)
+    df.dropna(subset=['articleTitle', 'articleDescription', 'articleCleanDescription'], inplace=True)
+    df['authorName'].fillna("Inconnu", inplace=True)
+    df.reset_index(drop=True, inplace=True)
+
     df['Year'] = df['articleCreatedDate'].dt.year
 
     kpis = {
@@ -41,6 +53,7 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
         "neutral": int(df[df['sentimentHumanReadable'] == 'neutral'].shape[0]),
     }
 
+    # 🔸 Granularité
     if granularity == "Par jour":
         df['Period'] = df['articleCreatedDate'].dt.date
     elif granularity == "Par semaine":
@@ -52,6 +65,7 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
     else:
         df['Period'] = df['articleCreatedDate'].dt.to_period('M')
 
+    # 📈 Graphique 1 : Évolution des mentions
     mentions_over_time = df['Period'].value_counts().sort_index()
     fig1, ax1 = plt.subplots(figsize=(10, 4))
     ax1.plot(mentions_over_time.index.astype(str), mentions_over_time.values, marker='o', linestyle='-', color="#2F6690")
@@ -62,6 +76,7 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
     evolution_mentions_b64 = fig_to_base64(fig1)
     plt.close(fig1)
 
+    # 📊 Graphique 2 : Répartition des sentiments
     sentiment_counts_raw = df['sentimentHumanReadable'].value_counts()
     sentiment_counts = pd.Series([sentiment_counts_raw.get(s, 0) for s in desired_order], index=desired_order)
     fig2, ax2 = plt.subplots()
@@ -72,10 +87,10 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
     sentiments_global_b64 = fig_to_base64(fig2)
     plt.close(fig2)
 
+    # 📊 Graphique 3 : Répartition par auteur
     author_sentiment = df.groupby(['authorName', 'sentimentHumanReadable']).size().unstack(fill_value=0)
     author_sentiment['Total'] = author_sentiment.sum(axis=1)
-    top_authors_sentiment = author_sentiment.sort_values(by='Total', ascending=False).head(10)
-    top_authors_sentiment = top_authors_sentiment.drop(columns='Total')
+    top_authors_sentiment = author_sentiment.sort_values(by='Total', ascending=False).head(10).drop(columns='Total')
     existing_sentiments = [s for s in desired_order if s in top_authors_sentiment.columns]
     top_authors_sentiment = top_authors_sentiment[existing_sentiments].iloc[::-1]
     fig3, ax3 = plt.subplots(figsize=(10, 6))
@@ -87,15 +102,17 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
     sentiments_auteurs_b64 = fig_to_base64(fig3)
     plt.close(fig3)
 
+    # 📋 Tableau : top auteurs
     top_table = (
         df['authorName']
         .value_counts()
         .reset_index()
-        .rename(columns={'index': 'count', 'authorName': 'Auteur' })
+        .rename(columns={'index': 'Auteur', 'authorName': 'Articles'})
         .head(10)
         .to_html(index=False, border=1, classes="styled-table")
     )
 
+    # 📝 Rapport HTML
     html_report = f"""<!DOCTYPE html>
 <html lang='fr'>
 <head>
@@ -128,8 +145,8 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
     <h1>📊 Rapport d'Analyse de Veille Médiatique</h1>
 
     <p>
-        Ce rapport présente une analyse des articles collectés. Il fournit des indicateurs de mentions,
-        la répartition des sentiments exprimés, et une synthèse des auteurs les plus actifs.
+        Ce rapport présente une analyse des articles bruts. Il applique un nettoyage automatique
+        puis fournit des indicateurs clés, une répartition des sentiments, et les auteurs les plus actifs.
     </p>
 
     <ul>
@@ -151,7 +168,6 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
     <h2>Top 10 Auteurs les plus actifs</h2>
     {top_table}
 
-    
 </body>
 </html>"""
 
