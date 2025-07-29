@@ -152,12 +152,26 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
         (positives, négatives ou neutres) ainsi que des sources les plus influentes.
     </p>
 
-    <ul>
-        <li><strong>Mentions totales :</strong> {kpis['total_mentions']}</li>
-        <li><strong>Positives :</strong> {kpis['positive']}</li>
-        <li><strong>Négatives :</strong> {kpis['negative']}</li>
-        <li><strong>Neutres :</strong> {kpis['neutral']}</li>
-    </ul>
+    <h2>Indicateurs Clés</h2>
+<div style="display: flex; justify-content: space-around; margin: 20px 0;">
+    <div style="text-align: center;">
+        <h3 style="margin-bottom: 5px;">{kpis['total_mentions']}</h3>
+        <p style="margin: 0;">Mentions totales</p>
+    </div>
+    <div style="text-align: center;">
+        <h3 style="margin-bottom: 5px;">{kpis['positive']}</h3>
+        <p style="margin: 0;">Positives</p>
+    </div>
+    <div style="text-align: center;">
+        <h3 style="margin-bottom: 5px;">{kpis['negative']}</h3>
+        <p style="margin: 0;">Négatives</p>
+    </div>
+    <div style="text-align: center;">
+        <h3 style="margin-bottom: 5px;">{kpis['neutral']}</h3>
+        <p style="margin: 0;">Neutres</p>
+    </div>
+</div>
+
 
     <div class="image-block">
         <h2>Évolution des mentions</h2>
@@ -181,10 +195,10 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
         <h2>Répartition des sentiments par auteur</h2>
         <img src="data:image/png;base64,{sentiments_auteurs_b64}" width="700"/>
         <p class="interpretation">
-            Les auteurs les plus actifs sont <em>news-webmaster@google.com</em>, <em>Fox News</em> et <em>Inconnu</em>.
-            Les articles de <em>news-webmaster@google.com</em> sont majoritairement positifs.
-            <em>Fox News</em> présente une répartition plus variée, avec une part importante d’articles négatifs.
-            Les articles d’auteur <em>Inconnu</em> sont surtout neutres.
+            Les auteurs les plus actifs sont <em>'news-webmaster@google.com'</em>, <em>'Fox News'</em> et <em>'Inconnu'</em>.
+            Les articles de <em>'news-webmaster@google.com'</em> sont majoritairement positifs.
+            <em>'Fox News'</em> présente une répartition plus variée, avec une part importante d’articles négatifs.
+            Les articles d’auteur <em>'Inconnu'</em> sont surtout neutres.Globalement, les sentiments dominants dans le corpus sont positifs et neutres.
         </p>
     </div>
 
