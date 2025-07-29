@@ -7,7 +7,6 @@ import seaborn as sns
 from io import BytesIO 
 import base64
 import os
-
 # Import de la fonction de prétraitement
 from preprocessing import clean_dataframe
 
