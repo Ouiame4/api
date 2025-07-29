@@ -4,13 +4,12 @@ from fastapi.responses import FileResponse
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from io import BytesIO 
+from io import BytesIO
 import base64
 import os
-# Import de la fonction de prétraitement
-from preprocessing import clean_dataframe
+from preprocessing import clean_dataframe  
 
-app = FastAPI(title="API Analyse Veille Médiatique ")
+app = FastAPI(title="API Analyse Veille Médiatique")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,7 +29,7 @@ def fig_to_base64(fig):
 
 @app.post("/analyser")
 async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Par mois")):
-    df = clean_dataframe(pd.read_csv(file.file))  # nettoyage via fichier externe
+    df = clean_dataframe(pd.read_csv(file.file))
 
     df['Year'] = df['articleCreatedDate'].dt.year
 
@@ -52,7 +51,6 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
     else:
         df['Period'] = df['articleCreatedDate'].dt.to_period('M')
 
-    # Graph 1
     mentions_over_time = df['Period'].value_counts().sort_index()
     fig1, ax1 = plt.subplots(figsize=(10, 4))
     ax1.plot(mentions_over_time.index.astype(str), mentions_over_time.values, marker='o', linestyle='-', color="#2F6690")
@@ -63,7 +61,6 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
     evolution_mentions_b64 = fig_to_base64(fig1)
     plt.close(fig1)
 
-    # Graph 2
     sentiment_counts_raw = df['sentimentHumanReadable'].value_counts()
     sentiment_counts = pd.Series([sentiment_counts_raw.get(s, 0) for s in desired_order], index=desired_order)
     fig2, ax2 = plt.subplots()
@@ -74,7 +71,6 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
     sentiments_global_b64 = fig_to_base64(fig2)
     plt.close(fig2)
 
-    # Graph 3
     author_sentiment = df.groupby(['authorName', 'sentimentHumanReadable']).size().unstack(fill_value=0)
     author_sentiment['Total'] = author_sentiment.sum(axis=1)
     top_authors_sentiment = author_sentiment.sort_values(by='Total', ascending=False).head(10).drop(columns='Total')
@@ -89,12 +85,11 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
     sentiments_auteurs_b64 = fig_to_base64(fig3)
     plt.close(fig3)
 
-    # Tableau top auteurs
     top_table = (
         df['authorName']
         .value_counts()
         .reset_index()
-        .rename(columns={'index': 'Articles', 'authorName': 'Auteur'})
+        .rename(columns={'index': 'Auteur', 'authorName': 'Articles'})
         .head(10)
         .to_html(index=False, border=1, classes="styled-table")
     )
@@ -107,13 +102,24 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
     <style>
         body {{
             font-family: Arial, sans-serif;
-            padding: 20px;
+            padding: 40px;
+            max-width: 900px;
+            margin: auto;
+            background-color: #f9f9f9;
+        }}
+        h1, h2 {{
+            text-align: center;
+            color: #2F6690;
+        }}
+        p, ul {{
+            font-size: 16px;
+            line-height: 1.6;
         }}
         .styled-table {{
             border-collapse: collapse;
-            margin: 25px 0;
+            margin: 25px auto;
             font-size: 16px;
-            width: 60%;
+            width: 80%;
             border: 1px solid #dddddd;
         }}
         .styled-table th, .styled-table td {{
@@ -125,25 +131,26 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
             background-color: #f3f3f3;
             font-weight: bold;
         }}
+        .image-block {{
+            text-align: center;
+            margin: 30px 0;
+        }}
+        .interpretation {{
+            font-style: italic;
+            color: #444;
+            margin: 10px auto 40px;
+            max-width: 800px;
+        }}
     </style>
 </head>
 <body>
     <h1>📊 Rapport d'Analyse de Veille Médiatique</h1>
-    <p style="font-size: 16px; line-height: 1.6;">
-        Ce rapport de veille médiatique présente une analyse approfondie des articles publiés autour d'un sujet d’actualité.
-        Il a pour objectif de fournir aux décideurs une vision claire et synthétique des mentions, du ton général (sentiment), 
-        ainsi que de l’activité des sources les plus influentes.
-    </p>
-    <p style="font-size: 16px; line-height: 1.6;">
-        À travers des indicateurs clés et des visualisations intuitives, ce rapport permet d’identifier les tendances temporelles, 
-        la perception médiatique (positive, négative ou neutre), ainsi que les auteurs ou plateformes ayant le plus contribué 
-        à la diffusion des informations.
-    </p>
-    <p style="font-size: 16px; line-height: 1.6;">
-        Cette analyse vise à soutenir la prise de décision stratégique, la compréhension de l’image publique,
-        et la détection rapide de signaux faibles ou d’évolutions notables dans le discours médiatique.
-    </p>
 
+    <p>
+        Ce rapport de veille médiatique présente une analyse approfondie des articles publiés autour d’un sujet d’actualité.
+        Il a pour objectif de fournir aux décideurs une vision claire et synthétique des mentions médiatiques, des perceptions exprimées
+        (positives, négatives ou neutres) ainsi que des sources les plus influentes.
+    </p>
 
     <ul>
         <li><strong>Mentions totales :</strong> {kpis['total_mentions']}</li>
@@ -152,18 +159,39 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
         <li><strong>Neutres :</strong> {kpis['neutral']}</li>
     </ul>
 
-    <h2>Évolution des mentions</h2>
-    <img src="data:image/png;base64,{evolution_mentions_b64}" width="700"/>
+    <div class="image-block">
+        <h2>Évolution des mentions</h2>
+        <img src="data:image/png;base64,{evolution_mentions_b64}" width="700"/>
+        <p class="interpretation">
+            Le nombre de mentions reste très faible jusqu’en mars 2025, puis connaît une forte hausse à partir de mai,
+            signe d’un intérêt soudain ou d’un événement marquant.
+        </p>
+    </div>
 
-    <h2>Répartition globale des sentiments</h2>
-    <img src="data:image/png;base64,{sentiments_global_b64}" width="600"/>
+    <div class="image-block">
+        <h2>Répartition globale des sentiments</h2>
+        <img src="data:image/png;base64,{sentiments_global_b64}" width="600"/>
+        <p class="interpretation">
+            La plupart des articles sont positifs, ce qui montre une image globalement favorable.
+            Les articles négatifs restent peu nombreux.
+        </p>
+    </div>
 
-    <h2>Répartition des sentiments par auteur</h2>
-    <img src="data:image/png;base64,{sentiments_auteurs_b64}" width="700"/>
+    <div class="image-block">
+        <h2>Répartition des sentiments par auteur</h2>
+        <img src="data:image/png;base64,{sentiments_auteurs_b64}" width="700"/>
+        <p class="interpretation">
+            Les auteurs les plus actifs sont <em>news-webmaster@google.com</em>, <em>Fox News</em> et <em>Inconnu</em>.
+            Les articles de <em>news-webmaster@google.com</em> sont majoritairement positifs.
+            <em>Fox News</em> présente une répartition plus variée, avec une part importante d’articles négatifs.
+            Les articles d’auteur <em>Inconnu</em> sont surtout neutres.
+        </p>
+    </div>
 
     <h2>Top 10 Auteurs les plus actifs</h2>
     {top_table}
 
+    
 </body>
 </html>"""
 
