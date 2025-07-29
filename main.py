@@ -4,7 +4,7 @@ from fastapi.responses import FileResponse
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from io import BytesIO
+from io import BytesIO 
 import base64
 import os
 
