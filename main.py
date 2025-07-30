@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form 
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import pandas as pd
@@ -7,7 +7,7 @@ import seaborn as sns
 from io import BytesIO
 import base64
 import os
-from preprocessing import clean_dataframe  
+from preprocessing import clean_dataframe
 
 app = FastAPI(title="API Analyse Veille Médiatique")
 
@@ -88,7 +88,7 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
         df['authorName']
         .value_counts()
         .reset_index()
-        .rename(columns={'index': 'count', 'authorName': 'Auteur'})
+        .rename(columns={'index': 'Auteur', 'authorName': 'Articles'})
         .head(10)
         .to_html(index=False, border=1, classes="styled-table")
     )
@@ -98,7 +98,6 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
 <head>
     <meta charset='UTF-8'>
     <title>Rapport de Veille Médiatique</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         body {{
             font-family: Arial, sans-serif;
@@ -111,7 +110,10 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
             text-align: center;
             color: #2F6690;
         }}
-        p, ul {{
+        .centered-text {{
+            max-width: 800px;
+            margin: 0 auto 40px;
+            text-align: center;
             font-size: 16px;
             line-height: 1.6;
         }}
@@ -135,103 +137,79 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
             text-align: center;
             margin: 30px 0;
         }}
-        .interpretation {{
-            font-style: italic;
-            color: #444;
-            margin: 10px auto 40px;
-            max-width: 800px;
-        }}
-        .btn-download {{
-            text-align: right;
-            margin-bottom: 20px;
-        }}
     </style>
 </head>
 <body>
-
-    <div class="btn-download">
-        <button onclick="downloadPDF()" style="padding: 8px 16px; background-color: #2F6690; color: white; border: none; border-radius: 5px; cursor: pointer;">
-            📄 Télécharger en PDF
-        </button>
-    </div>
-
     <h1>📊 Rapport d'Analyse de Veille Médiatique</h1>
 
-    <p>
-        Ce rapport de veille médiatique présente une analyse approfondie des articles publiés autour d’un sujet d’actualité.
-        Il a pour objectif de fournir aux décideurs une vision claire et synthétique des mentions médiatiques, des perceptions exprimées
-        (positives, négatives ou neutres) ainsi que des sources les plus influentes.
-    </p>
+    <div class="centered-text">
+        <p>
+            Ce rapport de veille médiatique présente une analyse approfondie des articles publiés autour d’un sujet d’actualité.
+            Il a pour objectif de fournir aux décideurs une vision claire et synthétique des mentions médiatiques, des perceptions exprimées
+            (positives, négatives ou neutres) ainsi que des sources les plus influentes.
+        </p>
+    </div>
 
     <h2>Indicateurs Clés</h2>
     <div style="display: flex; justify-content: space-around; margin: 20px 0;">
         <div style="text-align: center;">
-            <h3 style="margin-bottom: 5px;">{kpis['total_mentions']}</h3>
-            <p style="margin: 0;">Mentions totales</p>
+            <h3>{kpis['total_mentions']}</h3>
+            <p>Mentions totales</p>
         </div>
         <div style="text-align: center;">
-            <h3 style="margin-bottom: 5px;">{kpis['positive']}</h3>
-            <p style="margin: 0;">Positives</p>
+            <h3>{kpis['positive']}</h3>
+            <p>Positives</p>
         </div>
         <div style="text-align: center;">
-            <h3 style="margin-bottom: 5px;">{kpis['negative']}</h3>
-            <p style="margin: 0;">Négatives</p>
+            <h3>{kpis['negative']}</h3>
+            <p>Négatives</p>
         </div>
         <div style="text-align: center;">
-            <h3 style="margin-bottom: 5px;">{kpis['neutral']}</h3>
-            <p style="margin: 0;">Neutres</p>
+            <h3>{kpis['neutral']}</h3>
+            <p>Neutres</p>
         </div>
     </div>
 
     <div class="image-block">
         <h2>Évolution des mentions</h2>
         <img src="data:image/png;base64,{evolution_mentions_b64}" width="700"/>
-        <p class="interpretation">
-            Le nombre de mentions reste très faible jusqu’en mars 2025, puis connaît une forte hausse à partir de mai,
-            signe d’un intérêt soudain ou d’un événement marquant.
-        </p>
+        <div class="centered-text">
+            <p>
+                Le nombre de mentions reste très faible jusqu’en mars 2025, puis connaît une forte hausse à partir de mai,
+                signe d’un intérêt soudain ou d’un événement marquant.
+            </p>
+        </div>
     </div>
 
     <div class="image-block">
         <h2>Répartition globale des sentiments</h2>
         <img src="data:image/png;base64,{sentiments_global_b64}" width="600"/>
-        <p class="interpretation">
-            La plupart des articles sont positifs, ce qui montre une image globalement favorable.
-            Les articles négatifs restent peu nombreux.
-        </p>
+        <div class="centered-text">
+            <p>
+                La plupart des articles sont positifs, ce qui montre une image globalement favorable.
+                Les articles négatifs restent peu nombreux.
+            </p>
+        </div>
     </div>
 
     <div class="image-block">
         <h2>Répartition des sentiments par auteur</h2>
         <img src="data:image/png;base64,{sentiments_auteurs_b64}" width="700"/>
-        <p class="interpretation">
-            Les auteurs les plus actifs sont <em>'news-webmaster@google.com'</em>, <em>'Fox News'</em> et <em>'Inconnu'</em>.
-            Les articles de <em>'news-webmaster@google.com'</em> sont majoritairement positifs.
-            <em>'Fox News'</em> présente une répartition plus variée, avec une part importante d’articles négatifs.
-            Les articles d’auteur <em>'Inconnu'</em> sont surtout neutres.Globalement, les sentiments dominants dans le corpus sont positifs et neutres.
-        </p>
+        <div class="centered-text">
+            <p>
+                Les auteurs les plus actifs sont <em>news-webmaster@google.com</em>, <em>Fox News</em> et <em>Inconnu</em>.
+                Les articles de <em>news-webmaster@google.com</em> sont majoritairement positifs.
+                <em>Fox News</em> présente une répartition plus variée avec une part importante d’articles négatifs.
+                Les articles d’auteur <em>Inconnu</em> sont surtout neutres.Globalement, les sentiments dominants dans le corpus sont positifs et neutres.
+            </p>
+        </div>
     </div>
 
     <h2>Top 10 Auteurs les plus actifs</h2>
     {top_table}
 
-    <script>
-        function downloadPDF() {{
-            const element = document.body;
-            const opt = {{
-                margin:       0.5,
-                filename:     'rapport_veille.pdf',
-                image:        {{ type: 'jpeg', quality: 0.98 }},
-                html2canvas:  {{ scale: 2 }},
-                jsPDF:        {{ unit: 'in', format: 'a4', orientation: 'portrait' }}
-            }};
-            html2pdf().set(opt).from(element).save();
-        }}
-    </script>
-
 </body>
-</html>
-"""
+</html>"""
 
     os.makedirs("static", exist_ok=True)
     with open("static/rapport_veille.html", "w", encoding="utf-8") as f:
