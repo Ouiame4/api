@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import pandas as pd
@@ -30,7 +30,6 @@ def fig_to_base64(fig):
 @app.post("/analyser")
 async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Par mois")):
     df = clean_dataframe(pd.read_csv(file.file))
-
     df['Year'] = df['articleCreatedDate'].dt.year
 
     kpis = {
@@ -89,7 +88,7 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
         df['authorName']
         .value_counts()
         .reset_index()
-        .rename(columns={'index': 'Auteur', 'authorName': 'Articles'})
+        .rename(columns={'index': 'count', 'authorName': 'Auteur'})
         .head(10)
         .to_html(index=False, border=1, classes="styled-table")
     )
@@ -99,6 +98,7 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
 <head>
     <meta charset='UTF-8'>
     <title>Rapport de Veille Médiatique</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         body {{
             font-family: Arial, sans-serif;
@@ -141,9 +141,20 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
             margin: 10px auto 40px;
             max-width: 800px;
         }}
+        .btn-download {{
+            text-align: right;
+            margin-bottom: 20px;
+        }}
     </style>
 </head>
 <body>
+
+    <div class="btn-download">
+        <button onclick="downloadPDF()" style="padding: 8px 16px; background-color: #2F6690; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            📄 Télécharger en PDF
+        </button>
+    </div>
+
     <h1>📊 Rapport d'Analyse de Veille Médiatique</h1>
 
     <p>
@@ -153,25 +164,24 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
     </p>
 
     <h2>Indicateurs Clés</h2>
-<div style="display: flex; justify-content: space-around; margin: 20px 0;">
-    <div style="text-align: center;">
-        <h3 style="margin-bottom: 5px;">{kpis['total_mentions']}</h3>
-        <p style="margin: 0;">Mentions totales</p>
+    <div style="display: flex; justify-content: space-around; margin: 20px 0;">
+        <div style="text-align: center;">
+            <h3 style="margin-bottom: 5px;">{kpis['total_mentions']}</h3>
+            <p style="margin: 0;">Mentions totales</p>
+        </div>
+        <div style="text-align: center;">
+            <h3 style="margin-bottom: 5px;">{kpis['positive']}</h3>
+            <p style="margin: 0;">Positives</p>
+        </div>
+        <div style="text-align: center;">
+            <h3 style="margin-bottom: 5px;">{kpis['negative']}</h3>
+            <p style="margin: 0;">Négatives</p>
+        </div>
+        <div style="text-align: center;">
+            <h3 style="margin-bottom: 5px;">{kpis['neutral']}</h3>
+            <p style="margin: 0;">Neutres</p>
+        </div>
     </div>
-    <div style="text-align: center;">
-        <h3 style="margin-bottom: 5px;">{kpis['positive']}</h3>
-        <p style="margin: 0;">Positives</p>
-    </div>
-    <div style="text-align: center;">
-        <h3 style="margin-bottom: 5px;">{kpis['negative']}</h3>
-        <p style="margin: 0;">Négatives</p>
-    </div>
-    <div style="text-align: center;">
-        <h3 style="margin-bottom: 5px;">{kpis['neutral']}</h3>
-        <p style="margin: 0;">Neutres</p>
-    </div>
-</div>
-
 
     <div class="image-block">
         <h2>Évolution des mentions</h2>
@@ -205,9 +215,23 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
     <h2>Top 10 Auteurs les plus actifs</h2>
     {top_table}
 
-    
+    <script>
+        function downloadPDF() {{
+            const element = document.body;
+            const opt = {{
+                margin:       0.5,
+                filename:     'rapport_veille.pdf',
+                image:        {{ type: 'jpeg', quality: 0.98 }},
+                html2canvas:  {{ scale: 2 }},
+                jsPDF:        {{ unit: 'in', format: 'a4', orientation: 'portrait' }}
+            }};
+            html2pdf().set(opt).from(element).save();
+        }}
+    </script>
+
 </body>
-</html>"""
+</html>
+"""
 
     os.makedirs("static", exist_ok=True)
     with open("static/rapport_veille.html", "w", encoding="utf-8") as f:
