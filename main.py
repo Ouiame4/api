@@ -197,10 +197,10 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
         <img src="data:image/png;base64,{sentiments_auteurs_b64}" width="700"/>
         <div class="centered-text">
             <p>
-                Les auteurs les plus actifs sont <em>news-webmaster@google.com</em>, <em>Fox News</em> et <em>Inconnu</em>.
-                Les articles de <em>news-webmaster@google.com</em> sont majoritairement positifs.
-                <em>Fox News</em> présente une répartition plus variée avec une part importante d’articles négatifs.
-                Les articles d’auteur <em>Inconnu</em> sont surtout neutres.Globalement, les sentiments dominants dans le corpus sont positifs et neutres.
+                Les auteurs les plus actifs sont <em>'news-webmaster@google.com'</em>, <em>'Fox News'</em> et <em>'Inconnu'</em>.
+                Les articles de <em>'news-webmaster@google.com'</em> sont majoritairement positifs.
+                <em>'Fox News'</em> présente une répartition plus variée avec une part importante d’articles négatifs.
+                Les articles d’auteur <em>'Inconnu'</em> sont surtout neutres.Globalement, les sentiments dominants dans le corpus sont positifs et neutres.
             </p>
         </div>
     </div>
