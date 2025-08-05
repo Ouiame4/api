@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import pandas as pd
@@ -7,7 +7,8 @@ import seaborn as sns
 from io import BytesIO
 import base64
 import os
-from preprocessing import clean_dataframe
+import datetime
+from typing import List
 
 app = FastAPI(title="API Analyse Veille Médiatique")
 
@@ -27,9 +28,30 @@ def fig_to_base64(fig):
     buf.seek(0)
     return base64.b64encode(buf.read()).decode("utf-8")
 
-@app.post("/analyser")
-async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Par mois")):
-    df = clean_dataframe(pd.read_csv(file.file))
+def clean_json_data(data: List[dict]) -> pd.DataFrame:
+    df = pd.DataFrame(data)
+
+    # Renommer les colonnes pour correspondre à l'ancien schéma
+    df.rename(columns={
+        'author': 'authorName',
+        'sentiment_label': 'sentimentHumanReadable',
+        'published_at': 'articleCreatedDate'
+    }, inplace=True)
+
+    # Convertir la date en datetime
+    df['articleCreatedDate'] = pd.to_datetime(df['articleCreatedDate'], unit='s', errors='coerce')
+
+    # Supprimer les lignes avec des dates invalides
+    df.dropna(subset=['articleCreatedDate'], inplace=True)
+
+    return df
+
+@app.post("/analyser_json")
+async def analyser_json(request: Request, granularity: str = Form("Par mois")):
+    body = await request.json()
+    data = body if isinstance(body, list) else body.get("articles", [])
+
+    df = clean_json_data(data)
     df['Year'] = df['articleCreatedDate'].dt.year
 
     kpis = {
