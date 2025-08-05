@@ -173,36 +173,16 @@ async def analyser_csv(file: UploadFile = File(...), granularity: str = Form("Pa
     <div class="image-block">
         <h2>Évolution des mentions</h2>
         <img src="data:image/png;base64,{evolution_mentions_b64}" width="700"/>
-        <div class="centered-text">
-            <p>
-                Le nombre de mentions reste très faible jusqu’en mars 2025, puis connaît une forte hausse à partir de mai,
-                signe d’un intérêt soudain ou d’un événement marquant.
-            </p>
-        </div>
     </div>
 
     <div class="image-block">
         <h2>Répartition globale des sentiments</h2>
         <img src="data:image/png;base64,{sentiments_global_b64}" width="600"/>
-        <div class="centered-text">
-            <p>
-                La plupart des articles sont positifs, ce qui montre une image globalement favorable.
-                Les articles négatifs restent peu nombreux.
-            </p>
-        </div>
     </div>
 
     <div class="image-block">
         <h2>Répartition des sentiments par auteur</h2>
         <img src="data:image/png;base64,{sentiments_auteurs_b64}" width="700"/>
-        <div class="centered-text">
-            <p>
-                Les auteurs les plus actifs sont <em>'news-webmaster@google.com'</em>, <em>'Fox News'</em> et <em>'Inconnu'</em>.
-                Les articles de <em>'news-webmaster@google.com'</em> sont majoritairement positifs.
-                <em>'Fox News'</em> présente une répartition plus variée avec une part importante d’articles négatifs.
-                Les articles d’auteur <em>'Inconnu'</em> sont surtout neutres.Globalement, les sentiments dominants dans le corpus sont positifs et neutres.
-            </p>
-        </div>
     </div>
 
     <h2>Top 10 Auteurs les plus actifs</h2>
