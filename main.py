@@ -79,28 +79,28 @@ async def analyser_json(payload: JSONData):
     evolution_mentions_b64 = fig_to_base64(fig1)
     plt.close(fig1)
 
-    # 🔁 NOUVEAU : Graphique des mots-clés les plus fréquents
-    all_keywords = [keyword.lower() for sublist in df['keywords'] for keyword in sublist]
-    keyword_counts = Counter(all_keywords).most_common(10)
-    keywords_df = pd.DataFrame(keyword_counts, columns=["Mot-clé", "Fréquence"])
-
-    fig2, ax2 = plt.subplots()
-    sns.barplot(x="Fréquence", y="Mot-clé", data=keywords_df, palette="Blues_d", ax=ax2)
-    ax2.set_title("Mots-clés les plus fréquents")
-    keywords_freq_b64 = fig_to_base64(fig2)
-    plt.close(fig2)
+    # WordCloud des mots-clés
+    all_keywords = [kw for sublist in df["keywords"] if isinstance(sublist, list) for kw in sublist]
+    if all_keywords:
+        keywords_text = " ".join(all_keywords)
+        wordcloud = WordCloud(width=800, height=400, background_color="white", colormap='Blues').generate(keywords_text)
+        fig_kw, ax_kw = plt.subplots(figsize=(10, 5))
+        ax_kw.imshow(wordcloud, interpolation='bilinear')
+        ax_kw.axis("off")
+        ax_kw.set_title("Mots-clés les plus fréquents", fontsize=16)
+        keywords_b64 = fig_to_base64(fig_kw)
+        plt.close(fig_kw)
+    else:
+        keywords_b64 = ""
 
     # Répartition sentiments par auteur
     author_sentiment = df.groupby(['authorName', 'sentimentHumanReadable']).size().unstack(fill_value=0)
     author_sentiment['Total'] = author_sentiment.sum(axis=1)
     top_authors_sentiment = author_sentiment.sort_values(by='Total', ascending=False).head(10).drop(columns='Total')
-    existing_sentiments = [s for s in desired_order if s in top_authors_sentiment.columns]
-    top_authors_sentiment = top_authors_sentiment[existing_sentiments].iloc[::-1]
     fig3, ax3 = plt.subplots(figsize=(10, 6))
-    top_authors_sentiment.plot(kind='barh', stacked=True, ax=ax3,
-        color=[palette_custom[desired_order.index(s)] for s in existing_sentiments])
+    top_authors_sentiment.plot(kind='barh', stacked=True, ax=ax3, color="#2F6690")
     ax3.set_xlabel("Nombre d'articles")
-    ax3.set_ylabel("Auteur / Source")
+    ax3.set_ylabel("Auteur")
     ax3.set_title("Répartition des sentiments par auteur")
     sentiments_auteurs_b64 = fig_to_base64(fig3)
     plt.close(fig3)
