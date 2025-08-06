@@ -1,15 +1,15 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns 
+import seaborn as sns
+from wordcloud import WordCloud
 from io import BytesIO
 import base64
 import os
 from datetime import datetime
-from collections import Counter
 
 # Initialisation de l'app
 app = FastAPI(title="API Analyse Veille Médiatique")
@@ -22,10 +22,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Palette et ordre des sentiments
-palette_custom = ["#81C3D7", "#219ebc", "#D9DCD6", "#2F6690", "#16425B"]
-desired_order = ['strongly positive', 'positive', 'neutral', 'negative', 'strongly negative']
-
 # Fonction d'encodage des graphiques
 def fig_to_base64(fig):
     buf = BytesIO()
@@ -33,7 +29,7 @@ def fig_to_base64(fig):
     buf.seek(0)
     return base64.b64encode(buf.read()).decode("utf-8")
 
-# Pydantic model pour la requête JSON
+# Modèles Pydantic
 class Article(BaseModel):
     author: str
     content_excerpt: str
@@ -46,7 +42,6 @@ class Article(BaseModel):
 class JSONData(BaseModel):
     data: list[Article]
 
-# Route POST /analyser_json
 @app.post("/analyser_json")
 async def analyser_json(payload: JSONData):
     raw_data = payload.data
@@ -58,19 +53,16 @@ async def analyser_json(payload: JSONData):
         "sentiment_label": "sentimentHumanReadable",
     })
 
-    df['Year'] = df['articleCreatedDate'].dt.year
-
     kpis = {
-        "total_mentions": int(df.shape[0]),
-        "positive": int(df[df['sentimentHumanReadable'] == 'positive'].shape[0]),
-        "negative": int(df[df['sentimentHumanReadable'] == 'negative'].shape[0]),
-        "neutral": int(df[df['sentimentHumanReadable'] == 'neutral'].shape[0]),
+        "total_mentions": len(df),
+        "positive": int((df["sentimentHumanReadable"] == "positive").sum()),
+        "negative": int((df["sentimentHumanReadable"] == "negative").sum()),
+        "neutral": int((df["sentimentHumanReadable"] == "neutral").sum()),
     }
 
-    df['Period'] = df['articleCreatedDate'].dt.date
-
     # Évolution des mentions
-    mentions_over_time = df['Period'].value_counts().sort_index()
+    df["Period"] = df["articleCreatedDate"].dt.date
+    mentions_over_time = df["Period"].value_counts().sort_index()
     fig1, ax1 = plt.subplots(figsize=(10, 4))
     ax1.plot(mentions_over_time.index.astype(str), mentions_over_time.values, marker='o', linestyle='-', color="#2F6690")
     ax1.set_title("Évolution des mentions par jour")
@@ -88,15 +80,15 @@ async def analyser_json(payload: JSONData):
         ax_kw.imshow(wordcloud, interpolation='bilinear')
         ax_kw.axis("off")
         ax_kw.set_title("Mots-clés les plus fréquents", fontsize=16)
-        keywords_b64 = fig_to_base64(fig_kw)
+        keywords_freq_b64 = fig_to_base64(fig_kw)
         plt.close(fig_kw)
     else:
-        keywords_b64 = ""
+        keywords_freq_b64 = ""
 
-    # Répartition sentiments par auteur
+    # Sentiments par auteur (graphique horizontal)
     author_sentiment = df.groupby(['authorName', 'sentimentHumanReadable']).size().unstack(fill_value=0)
     author_sentiment['Total'] = author_sentiment.sum(axis=1)
-    top_authors_sentiment = author_sentiment.sort_values(by='Total', ascending=False).head(10).drop(columns='Total')
+    top_authors_sentiment = author_sentiment.sort_values('Total', ascending=False).head(10).drop(columns='Total')
     fig3, ax3 = plt.subplots(figsize=(10, 6))
     top_authors_sentiment.plot(kind='barh', stacked=True, ax=ax3, color="#2F6690")
     ax3.set_xlabel("Nombre d'articles")
@@ -107,15 +99,15 @@ async def analyser_json(payload: JSONData):
 
     # Tableau top auteurs
     top_table = (
-        df['authorName']
+        df["authorName"]
         .value_counts()
         .reset_index()
-        .rename(columns={'index': 'count', 'authorName': 'Auteur'})
+        .rename(columns={"index": "Auteur", "authorName": "Nombre d'articles"})
         .head(10)
         .to_html(index=False, border=1, classes="styled-table")
     )
 
-    # Rapport HTML
+    # HTML final
     html_report = f"""<!DOCTYPE html>
 <html lang='fr'>
 <head>
@@ -134,7 +126,7 @@ async def analyser_json(payload: JSONData):
 <body>
     <h1>📊 Rapport d'Analyse de Veille Médiatique</h1>
     <div class="centered-text">
-        <p>Ce rapport présente une analyse des articles provenant de Lumenfeed, avec des statistiques sur la couverture médiatique, les sentiments exprimés, et les auteurs les plus actifs.</p>
+        <p>Ce rapport présente une analyse des articles provenant de Lumenfeed, avec des statistiques sur la couverture médiatique, les mots-clés fréquents et les auteurs les plus actifs.</p>
     </div>
     <h2>Indicateurs Clés</h2>
     <div style="display: flex; justify-content: space-around; margin: 20px 0;">
@@ -170,7 +162,6 @@ async def analyser_json(payload: JSONData):
         "html_report": html_report
     }
 
-# Route GET pour consulter le rapport
 @app.get("/rapport")
 def get_rapport():
     return FileResponse("static/rapport_veille.html", media_type="text/html")
