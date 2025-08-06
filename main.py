@@ -9,6 +9,7 @@ from io import BytesIO
 import base64
 import os
 from datetime import datetime
+from collections import Counter
 
 # Initialisation de l'app
 app = FastAPI(title="API Analyse Veille Médiatique")
@@ -26,7 +27,6 @@ palette_custom = ["#81C3D7", "#219ebc", "#D9DCD6", "#2F6690", "#16425B"]
 desired_order = ['strongly positive', 'positive', 'neutral', 'negative', 'strongly negative']
 
 # Fonction d'encodage des graphiques
-
 def fig_to_base64(fig):
     buf = BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight")
@@ -34,7 +34,6 @@ def fig_to_base64(fig):
     return base64.b64encode(buf.read()).decode("utf-8")
 
 # Pydantic model pour la requête JSON
-
 class Article(BaseModel):
     author: str
     content_excerpt: str
@@ -42,12 +41,12 @@ class Article(BaseModel):
     sentiment_label: str
     title: str
     source_link: str
+    keywords: list[str] = []
 
 class JSONData(BaseModel):
     data: list[Article]
 
 # Route POST /analyser_json
-
 @app.post("/analyser_json")
 async def analyser_json(payload: JSONData):
     raw_data = payload.data
@@ -70,25 +69,28 @@ async def analyser_json(payload: JSONData):
 
     df['Period'] = df['articleCreatedDate'].dt.date
 
+    # Évolution des mentions
     mentions_over_time = df['Period'].value_counts().sort_index()
     fig1, ax1 = plt.subplots(figsize=(10, 4))
     ax1.plot(mentions_over_time.index.astype(str), mentions_over_time.values, marker='o', linestyle='-', color="#2F6690")
-    ax1.set_title("Évolution des mentions par mois")
+    ax1.set_title("Évolution des mentions par jour")
     ax1.set_ylabel("Mentions")
     plt.xticks(rotation=45)
     evolution_mentions_b64 = fig_to_base64(fig1)
     plt.close(fig1)
 
-    sentiment_counts_raw = df['sentimentHumanReadable'].value_counts()
-    sentiment_counts = pd.Series([sentiment_counts_raw.get(s, 0) for s in desired_order], index=desired_order)
+    # 🔁 NOUVEAU : Graphique des mots-clés les plus fréquents
+    all_keywords = [keyword.lower() for sublist in df['keywords'] for keyword in sublist]
+    keyword_counts = Counter(all_keywords).most_common(10)
+    keywords_df = pd.DataFrame(keyword_counts, columns=["Mot-clé", "Fréquence"])
+
     fig2, ax2 = plt.subplots()
-    sns.barplot(x=sentiment_counts.index, y=sentiment_counts.values, palette=palette_custom, ax=ax2)
-    ax2.set_ylabel("Nombre d'articles")
-    ax2.set_xlabel("Sentiment")
-    ax2.set_title("Répartition globale des sentiments")
-    sentiments_global_b64 = fig_to_base64(fig2)
+    sns.barplot(x="Fréquence", y="Mot-clé", data=keywords_df, palette="Blues_d", ax=ax2)
+    ax2.set_title("Mots-clés les plus fréquents")
+    keywords_freq_b64 = fig_to_base64(fig2)
     plt.close(fig2)
 
+    # Répartition sentiments par auteur
     author_sentiment = df.groupby(['authorName', 'sentimentHumanReadable']).size().unstack(fill_value=0)
     author_sentiment['Total'] = author_sentiment.sum(axis=1)
     top_authors_sentiment = author_sentiment.sort_values(by='Total', ascending=False).head(10).drop(columns='Total')
@@ -103,6 +105,7 @@ async def analyser_json(payload: JSONData):
     sentiments_auteurs_b64 = fig_to_base64(fig3)
     plt.close(fig3)
 
+    # Tableau top auteurs
     top_table = (
         df['authorName']
         .value_counts()
@@ -112,6 +115,7 @@ async def analyser_json(payload: JSONData):
         .to_html(index=False, border=1, classes="styled-table")
     )
 
+    # Rapport HTML
     html_report = f"""<!DOCTYPE html>
 <html lang='fr'>
 <head>
@@ -144,8 +148,8 @@ async def analyser_json(payload: JSONData):
         <img src="data:image/png;base64,{evolution_mentions_b64}" width="700"/>
     </div>
     <div class="image-block">
-        <h2>Répartition globale des sentiments</h2>
-        <img src="data:image/png;base64,{sentiments_global_b64}" width="600"/>
+        <h2>Mots-clés les plus fréquents</h2>
+        <img src="data:image/png;base64,{keywords_freq_b64}" width="600"/>
     </div>
     <div class="image-block">
         <h2>Répartition des sentiments par auteur</h2>
@@ -166,7 +170,7 @@ async def analyser_json(payload: JSONData):
         "html_report": html_report
     }
 
-# Route GET /rapport
+# Route GET pour consulter le rapport
 @app.get("/rapport")
 def get_rapport():
     return FileResponse("static/rapport_veille.html", media_type="text/html")
