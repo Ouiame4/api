@@ -7,8 +7,7 @@ import seaborn as sns
 from io import BytesIO
 import base64
 import os
-import datetime
-from typing import List
+from datetime import datetime
 
 app = FastAPI(title="API Analyse Veille Médiatique")
 
@@ -28,49 +27,29 @@ def fig_to_base64(fig):
     buf.seek(0)
     return base64.b64encode(buf.read()).decode("utf-8")
 
-def clean_json_data(data: List[dict]) -> pd.DataFrame:
-    df = pd.DataFrame(data)
-
-    # Renommer les colonnes pour correspondre à l'ancien schéma
-    df.rename(columns={
-        'author': 'authorName',
-        'sentiment_label': 'sentimentHumanReadable',
-        'published_at': 'articleCreatedDate'
-    }, inplace=True)
-
-    # Convertir la date en datetime
-    df['articleCreatedDate'] = pd.to_datetime(df['articleCreatedDate'], unit='s', errors='coerce')
-
-    # Supprimer les lignes avec des dates invalides
-    df.dropna(subset=['articleCreatedDate'], inplace=True)
-
-    return df
-
-@app.post("/analyser_json")
-async def analyser_json(request: Request, granularity: str = Form("Par mois")):
-    body = await request.json()
-    data = body if isinstance(body, list) else body.get("articles", [])
-
-    df = clean_json_data(data)
-    df['Year'] = df['articleCreatedDate'].dt.year
+def generate_report(df: pd.DataFrame, granularity: str = "Par mois"):
+    df['sentiment_label'] = df['sentiment_label'].astype(str).str.strip().str.lower()
+    df['published_at'] = pd.to_datetime(df['published_at'], unit='s', errors='coerce')
+    df['author'] = df['author'].fillna("Inconnu")
+    df['Year'] = df['published_at'].dt.year
 
     kpis = {
         "total_mentions": int(df.shape[0]),
-        "positive": int(df[df['sentimentHumanReadable'] == 'positive'].shape[0]),
-        "negative": int(df[df['sentimentHumanReadable'] == 'negative'].shape[0]),
-        "neutral": int(df[df['sentimentHumanReadable'] == 'neutral'].shape[0]),
+        "positive": int(df[df['sentiment_label'] == 'positive'].shape[0]),
+        "negative": int(df[df['sentiment_label'] == 'negative'].shape[0]),
+        "neutral": int(df[df['sentiment_label'] == 'neutral'].shape[0]),
     }
 
     if granularity == "Par jour":
-        df['Period'] = df['articleCreatedDate'].dt.date
+        df['Period'] = df['published_at'].dt.date
     elif granularity == "Par semaine":
-        df['Period'] = df['articleCreatedDate'].dt.to_period('W')
+        df['Period'] = df['published_at'].dt.to_period('W')
     elif granularity == "Par mois":
-        df['Period'] = df['articleCreatedDate'].dt.to_period('M')
+        df['Period'] = df['published_at'].dt.to_period('M')
     elif granularity == "Par année":
-        df['Period'] = df['articleCreatedDate'].dt.to_period('Y')
+        df['Period'] = df['published_at'].dt.to_period('Y')
     else:
-        df['Period'] = df['articleCreatedDate'].dt.to_period('M')
+        df['Period'] = df['published_at'].dt.to_period('M')
 
     mentions_over_time = df['Period'].value_counts().sort_index()
     fig1, ax1 = plt.subplots(figsize=(10, 4))
@@ -82,7 +61,7 @@ async def analyser_json(request: Request, granularity: str = Form("Par mois")):
     evolution_mentions_b64 = fig_to_base64(fig1)
     plt.close(fig1)
 
-    sentiment_counts_raw = df['sentimentHumanReadable'].value_counts()
+    sentiment_counts_raw = df['sentiment_label'].value_counts()
     sentiment_counts = pd.Series([sentiment_counts_raw.get(s, 0) for s in desired_order], index=desired_order)
     fig2, ax2 = plt.subplots()
     sns.barplot(x=sentiment_counts.index, y=sentiment_counts.values, palette=palette_custom, ax=ax2)
@@ -92,7 +71,7 @@ async def analyser_json(request: Request, granularity: str = Form("Par mois")):
     sentiments_global_b64 = fig_to_base64(fig2)
     plt.close(fig2)
 
-    author_sentiment = df.groupby(['authorName', 'sentimentHumanReadable']).size().unstack(fill_value=0)
+    author_sentiment = df.groupby(['author', 'sentiment_label']).size().unstack(fill_value=0)
     author_sentiment['Total'] = author_sentiment.sum(axis=1)
     top_authors_sentiment = author_sentiment.sort_values(by='Total', ascending=False).head(10).drop(columns='Total')
     existing_sentiments = [s for s in desired_order if s in top_authors_sentiment.columns]
@@ -107,10 +86,10 @@ async def analyser_json(request: Request, granularity: str = Form("Par mois")):
     plt.close(fig3)
 
     top_table = (
-        df['authorName']
+        df['author']
         .value_counts()
         .reset_index()
-        .rename(columns={'index': 'countt', 'authorName': 'Auteur'})
+        .rename(columns={'index': 'countt', 'author': 'Auteur'})
         .head(10)
         .to_html(index=False, border=1, classes="styled-table")
     )
@@ -165,31 +144,15 @@ async def analyser_json(request: Request, granularity: str = Form("Par mois")):
     <h1>📊 Rapport d'Analyse de Veille Médiatique</h1>
 
     <div class="centered-text">
-        <p>
-            Ce rapport de veille médiatique présente une analyse approfondie des articles publiés autour d’un sujet d’actualité.
-            Il a pour objectif de fournir aux décideurs une vision claire et synthétique des mentions médiatiques, des perceptions exprimées
-            (positives, négatives ou neutres) ainsi que des sources les plus influentes.
-        </p>
+        <p>Ce rapport présente une analyse des articles provenant de Lumenfeed, avec des statistiques sur la couverture médiatique, les sentiments exprimés, et les auteurs les plus actifs.</p>
     </div>
 
     <h2>Indicateurs Clés</h2>
     <div style="display: flex; justify-content: space-around; margin: 20px 0;">
-        <div style="text-align: center;">
-            <h3>{kpis['total_mentions']}</h3>
-            <p>Mentions totales</p>
-        </div>
-        <div style="text-align: center;">
-            <h3>{kpis['positive']}</h3>
-            <p>Positives</p>
-        </div>
-        <div style="text-align: center;">
-            <h3>{kpis['negative']}</h3>
-            <p>Négatives</p>
-        </div>
-        <div style="text-align: center;">
-            <h3>{kpis['neutral']}</h3>
-            <p>Neutres</p>
-        </div>
+        <div><h3>{kpis['total_mentions']}</h3><p>Mentions totales</p></div>
+        <div><h3>{kpis['positive']}</h3><p>Positives</p></div>
+        <div><h3>{kpis['negative']}</h3><p>Négatives</p></div>
+        <div><h3>{kpis['neutral']}</h3><p>Neutres</p></div>
     </div>
 
     <div class="image-block">
@@ -221,6 +184,23 @@ async def analyser_json(request: Request, granularity: str = Form("Par mois")):
         "kpis": kpis,
         "html_report": html_report
     }
+
+@app.post("/analyser_json")
+async def analyser_json(request: Request, granularity: str = Form("Par mois")):
+    data = await request.json()
+    if isinstance(data, dict) and "data" in data:
+        articles = data["data"]
+    elif isinstance(data, list):
+        articles = data
+    else:
+        return {"error": "Format JSON invalide"}
+
+    df = pd.DataFrame(articles)
+
+    if not all(col in df.columns for col in ['author', 'title', 'content_excerpt', 'published_at', 'sentiment_label']):
+        return {"error": "Colonnes manquantes dans les données JSON"}
+
+    return generate_report(df, granularity)
 
 @app.get("/rapport")
 def get_rapport():
