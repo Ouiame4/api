@@ -68,13 +68,12 @@ async def analyser_json(payload: JSONData):
         "neutral": int(df[df['sentimentHumanReadable'] == 'neutral'].shape[0]),
     }
 
-    df['Period'] = df['articleCreatedDate'].dt.to_period('M')
+    df['Period'] = df['articleCreatedDate'].dt.date
 
     mentions_over_time = df['Period'].value_counts().sort_index()
     fig1, ax1 = plt.subplots(figsize=(10, 4))
     ax1.plot(mentions_over_time.index.astype(str), mentions_over_time.values, marker='o', linestyle='-', color="#2F6690")
-    ax1.set_title("Évolution des mentions (par mois)")
-    ax1.set_xlabel("Période")
+    ax1.set_title("Évolution des mentions par mois")
     ax1.set_ylabel("Mentions")
     plt.xticks(rotation=45)
     evolution_mentions_b64 = fig_to_base64(fig1)
