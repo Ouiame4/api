@@ -102,7 +102,7 @@ async def analyser_json(payload: JSONData):
         df["authorName"]
         .value_counts()
         .reset_index()
-        .rename(columns={"index": "Auteur", "authorName": "Nombre d'articles"})
+        .rename(columns={"index": "count", "authorName": "Auteur"})
         .head(10)
         .to_html(index=False, border=1, classes="styled-table")
     )
