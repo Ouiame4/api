@@ -133,7 +133,11 @@ async def analyser_json(payload: JSONData):
 <body>
     <h1>📊 Rapport d'Analyse de Veille Médiatique</h1>
     <div class="centered-text">
-        <p>Ce rapport présente une analyse des articles provenant de Lumenfeed, avec des statistiques sur la couverture médiatique, les mots-clés fréquents et les auteurs les plus actifs.</p>
+        <p>
+            Ce rapport de veille médiatique fournit une analyse approfondie des articles collectés depuis la plateforme Lumenfeed. 
+            Il vise à offrir une vision claire et synthétique de la couverture médiatique d’un sujet donné, en mettant en évidence 
+            les volumes de publication, les auteurs les plus actifs, et les principaux mots-clés abordés. 
+        </p>
     </div>
     <h2>Indicateurs Clés</h2>
     <div style="display: flex; justify-content: space-around; margin: 20px 0;">
