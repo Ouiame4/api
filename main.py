@@ -108,7 +108,7 @@ async def analyser_json(payload: JSONData):
         df['authorName']
         .value_counts()
         .reset_index()
-        .rename(columns={'index': 'Auteur', 'authorName': 'Nombre d\'articles'})
+        .rename(columns={'index': 'Nbr d'articles', 'authorName': 'Auteur'})
         .head(10)
         .to_html(index=False, border=1, classes="styled-table")
     )
@@ -131,7 +131,7 @@ async def analyser_json(payload: JSONData):
 <body>
     <h1>📊 Rapport d'Analyse de Veille Médiatique</h1>
     <div class="centered-text">
-        <p>Ce rapport de veille médiatique présente une analyse approfondie des articles publiés autour d’un sujet d’actualité.</p>
+        <p>Ce rapport présente une analyse des articles provenant de Lumenfeed, avec des statistiques sur la couverture médiatique, les sentiments exprimés, et les auteurs les plus actifs.</p>
     </div>
     <h2>Indicateurs Clés</h2>
     <div style="display: flex; justify-content: space-around; margin: 20px 0;">
