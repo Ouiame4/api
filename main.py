@@ -4,20 +4,14 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 from wordcloud import WordCloud
 from io import BytesIO
 import base64
 import os
 from datetime import datetime
 
-# === Résumé avec sumy ===
-from sumy.parsers.plaintext import PlaintextParser
-from sumy.nlp.tokenizers import Tokenizer
-from sumy.summarizers.lsa import LsaSummarizer
-import nltk
-nltk.download('punkt', quiet=True)
-
-# Initialisation FastAPI
+# Initialisation de l'app
 app = FastAPI(title="API Analyse Veille Médiatique")
 
 # Middleware CORS
@@ -28,7 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Encodage image en base64
+# Fonction d'encodage des graphiques
 def fig_to_base64(fig):
     buf = BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight")
@@ -48,26 +42,16 @@ class Article(BaseModel):
 class JSONData(BaseModel):
     data: list[Article]
 
-# Fonction de résumé
-def generer_resume(df, nb_phrases=3):
-    textes = df['content_excerpt'].dropna().astype(str).tolist()
-    texte_complet = " ".join(textes)
-    if not texte_complet.strip():
-        return "Le contenu des articles ne permet pas de générer un résumé."
-
-    parser = PlaintextParser.from_string(texte_complet, Tokenizer("french"))
-    summarizer = LsaSummarizer()
-    resume = summarizer(parser.document, nb_phrases)
-    return " ".join(str(phrase) for phrase in resume)
-
-# Route d’analyse
 @app.post("/analyser_json")
 async def analyser_json(payload: JSONData):
     raw_data = payload.data
     df = pd.DataFrame([article.dict() for article in raw_data])
 
     df["articleCreatedDate"] = df["published_at"].apply(lambda ts: datetime.utcfromtimestamp(ts))
-    df = df.rename(columns={"author": "authorName", "sentiment_label": "sentimentHumanReadable"})
+    df = df.rename(columns={
+        "author": "authorName",
+        "sentiment_label": "sentimentHumanReadable",
+    })
 
     kpis = {
         "total_mentions": len(df),
@@ -101,18 +85,24 @@ async def analyser_json(payload: JSONData):
     else:
         keywords_freq_b64 = ""
 
-    # Répartition des sentiments par auteur
+    # Sentiments par auteur (graphique horizontal)
     author_sentiment = df.groupby(['authorName', 'sentimentHumanReadable']).size().unstack(fill_value=0)
+    # Calcul du total d’articles par auteur
     author_sentiment['Total'] = author_sentiment.sum(axis=1)
+    # Récupérer les 10 auteurs les plus actifs
     top_authors_sentiment = author_sentiment.sort_values(by='Total', ascending=False).head(10).drop(columns='Total')
-    top_authors_sentiment = top_authors_sentiment.iloc[::-1]  # ordre décroissant (plus actif en haut)
+    # Ordre décroissant des auteurs (le plus actif en haut)
+    top_authors_sentiment = top_authors_sentiment.iloc[::-1]
+    # Génération du graphique horizontal empilé
     fig3, ax3 = plt.subplots(figsize=(10, 6))
     top_authors_sentiment.plot(kind='barh', stacked=True, ax=ax3, color="#2F6690")
     ax3.set_xlabel("Nombre d'articles")
     ax3.set_ylabel("Auteur")
     ax3.set_title("Répartition des sentiments par auteur")
+    # Encodage base64
     sentiments_auteurs_b64 = fig_to_base64(fig3)
     plt.close(fig3)
+
 
     # Tableau top auteurs
     top_table = (
@@ -124,10 +114,7 @@ async def analyser_json(payload: JSONData):
         .to_html(index=False, border=1, classes="styled-table")
     )
 
-    # Résumé sémantique du sujet
-    resume_sujet = generer_resume(df)
-
-    # HTML du rapport
+    # HTML final
     html_report = f"""<!DOCTYPE html>
 <html lang='fr'>
 <head>
@@ -146,8 +133,11 @@ async def analyser_json(payload: JSONData):
 <body>
     <h1>📊 Rapport d'Analyse de Veille Médiatique</h1>
     <div class="centered-text">
-        <p>Ce rapport fournit une analyse approfondie des articles collectés depuis la plateforme Lumenfeed.</p>
-        <p><strong>Résumé du sujet analysé :</strong> {resume_sujet}</p>
+        <p>
+            Ce rapport de veille médiatique fournit une analyse approfondie des articles collectés depuis la plateforme Lumenfeed. 
+            Il vise à offrir une vision claire et synthétique de la couverture médiatique d’un sujet donné, en mettant en évidence 
+            les volumes de publication, les auteurs les plus actifs, et les principaux mots-clés abordés. 
+        </p>
     </div>
     <h2>Indicateurs Clés</h2>
     <div style="display: flex; justify-content: space-around; margin: 20px 0;">
@@ -183,7 +173,6 @@ async def analyser_json(payload: JSONData):
         "html_report": html_report
     }
 
-# Route GET pour consulter le rapport
 @app.get("/rapport")
 def get_rapport():
     return FileResponse("static/rapport_veille.html", media_type="text/html")
