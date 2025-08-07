@@ -5,5 +5,4 @@ matplotlib
 seaborn
 python-multipart
 wordcloud
-collections 
-string
+
