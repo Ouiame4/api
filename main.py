@@ -10,9 +10,6 @@ from io import BytesIO
 import base64
 import os
 from datetime import datetime
-import re
-from collections import Counter
-from string import punctuation
 
 # Initialisation de l'app
 app = FastAPI(title="API Analyse Veille Médiatique")
@@ -44,29 +41,6 @@ class Article(BaseModel):
 
 class JSONData(BaseModel):
     data: list[Article]
-
-# Résumé automatique
-def extract_keywords_summary(df):
-    from nltk.corpus import stopwords
-    import nltk
-    nltk.download('stopwords', quiet=True)
-
-    texts = df['content_excerpt'].dropna().astype(str).tolist()
-    full_text = " ".join(texts)
-    full_text = re.sub(r"http\S+|www.\S+", "", full_text)
-    full_text = full_text.translate(str.maketrans('', '', punctuation))
-    words = full_text.lower().split()
-
-    stop_words = set(stopwords.words("french") + stopwords.words("english"))
-    keywords = [w for w in words if w not in stop_words and len(w) > 3]
-
-    freq = Counter(keywords).most_common(10)
-    topics = [w for w, _ in freq]
-
-    if topics:
-        return f"Ce rapport traite principalement des sujets suivants : {', '.join(topics)}."
-    else:
-        return "Les sujets abordés dans ce rapport n'ont pas pu être résumés clairement."
 
 @app.post("/analyser_json")
 async def analyser_json(payload: JSONData):
@@ -111,18 +85,24 @@ async def analyser_json(payload: JSONData):
     else:
         keywords_freq_b64 = ""
 
-    # Répartition des sentiments par auteur
+    # Sentiments par auteur (graphique horizontal)
     author_sentiment = df.groupby(['authorName', 'sentimentHumanReadable']).size().unstack(fill_value=0)
+    # Calcul du total d’articles par auteur
     author_sentiment['Total'] = author_sentiment.sum(axis=1)
+    # Récupérer les 10 auteurs les plus actifs
     top_authors_sentiment = author_sentiment.sort_values(by='Total', ascending=False).head(10).drop(columns='Total')
+    # Ordre décroissant des auteurs (le plus actif en haut)
     top_authors_sentiment = top_authors_sentiment.iloc[::-1]
+    # Génération du graphique horizontal empilé
     fig3, ax3 = plt.subplots(figsize=(10, 6))
     top_authors_sentiment.plot(kind='barh', stacked=True, ax=ax3, color="#2F6690")
     ax3.set_xlabel("Nombre d'articles")
     ax3.set_ylabel("Auteur")
     ax3.set_title("Répartition des sentiments par auteur")
+    # Encodage base64
     sentiments_auteurs_b64 = fig_to_base64(fig3)
     plt.close(fig3)
+
 
     # Tableau top auteurs
     top_table = (
@@ -133,9 +113,6 @@ async def analyser_json(payload: JSONData):
         .head(10)
         .to_html(index=False, border=1, classes="styled-table")
     )
-
-    # Résumé du sujet
-    resume_sujet = extract_keywords_summary(df)
 
     # HTML final
     html_report = f"""<!DOCTYPE html>
@@ -157,9 +134,10 @@ async def analyser_json(payload: JSONData):
     <h1>📊 Rapport d'Analyse de Veille Médiatique</h1>
     <div class="centered-text">
         <p>
-            Ce rapport de veille médiatique fournit une analyse approfondie des articles collectés depuis la plateforme Lumenfeed.
+            Ce rapport fournit une analyse approfondie des articles collectés depuis la plateforme Lumenfeed. 
+            Il vise à offrir une vision claire et synthétique de la couverture médiatique d’un sujet donné, en mettant en évidence 
+            les volumes de publication, les auteurs les plus actifs, et les principaux mots-clés abordés. 
         </p>
-        <p><strong>Résumé du sujet analysé :</strong> {resume_sujet}</p>
     </div>
     <h2>Indicateurs Clés</h2>
     <div style="display: flex; justify-content: space-around; margin: 20px 0;">
