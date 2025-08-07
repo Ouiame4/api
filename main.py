@@ -10,11 +10,24 @@ from io import BytesIO
 import base64
 import os
 from datetime import datetime
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.decomposition import TruncatedSVD
 
-# Initialisation de l'app
+# Stopwords français
+french_stopwords = [
+    "au", "aux", "avec", "ce", "ces", "dans", "de", "des", "du", "elle", "en",
+    "et", "eux", "il", "je", "la", "le", "leur", "lui", "ma", "mais", "me",
+    "même", "mes", "moi", "mon", "ne", "nos", "notre", "nous", "on", "ou",
+    "par", "pas", "pour", "qu", "que", "qui", "sa", "se", "ses", "son", "sur",
+    "ta", "te", "tes", "toi", "ton", "tu", "un", "une", "vos", "votre", "vous",
+    "c", "d", "j", "l", "à", "m", "n", "s", "t", "y", "été", "étée", "étées",
+    "étés", "étant", "suis", "es", "est", "sommes", "êtes", "sont", "serai",
+    "seras", "sera", "serons", "serez", "seront", "serais", "serait", "serions",
+    "seriez", "seraient"
+]
+
 app = FastAPI(title="API Analyse Veille Médiatique")
 
-# Middleware CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -22,14 +35,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Fonction d'encodage des graphiques
 def fig_to_base64(fig):
     buf = BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight")
     buf.seek(0)
     return base64.b64encode(buf.read()).decode("utf-8")
 
-# Modèles Pydantic
 class Article(BaseModel):
     author: str
     content_excerpt: str
@@ -42,11 +53,22 @@ class Article(BaseModel):
 class JSONData(BaseModel):
     data: list[Article]
 
+def generer_resume_sujet(df: pd.DataFrame) -> str:
+    df['text'] = df['title'].fillna('') + ' ' + df['content_excerpt'].fillna('')
+    corpus = df['text'].tolist()
+    vectorizer = TfidfVectorizer(stop_words=french_stopwords, max_features=1000)
+    X = vectorizer.fit_transform(corpus)
+    if X.shape[0] < 1:
+        return "Sujet non identifiable."
+    svd = TruncatedSVD(n_components=1, random_state=42)
+    topic_vector = svd.fit_transform(X)
+    top_idx = topic_vector[:, 0].argsort()[::-1][:3]
+    resume = " ".join([corpus[i] for i in top_idx])
+    return resume
+
 @app.post("/analyser_json")
 async def analyser_json(payload: JSONData):
-    raw_data = payload.data
-    df = pd.DataFrame([article.dict() for article in raw_data])
-
+    df = pd.DataFrame([article.dict() for article in payload.data])
     df["articleCreatedDate"] = df["published_at"].apply(lambda ts: datetime.utcfromtimestamp(ts))
     df = df.rename(columns={
         "author": "authorName",
@@ -60,7 +82,8 @@ async def analyser_json(payload: JSONData):
         "neutral": int((df["sentimentHumanReadable"] == "neutral").sum()),
     }
 
-    # Évolution des mentions
+    resume_sujet = generer_resume_sujet(df)
+
     df["Period"] = df["articleCreatedDate"].dt.date
     mentions_over_time = df["Period"].value_counts().sort_index()
     fig1, ax1 = plt.subplots(figsize=(10, 4))
@@ -71,7 +94,6 @@ async def analyser_json(payload: JSONData):
     evolution_mentions_b64 = fig_to_base64(fig1)
     plt.close(fig1)
 
-    # WordCloud des mots-clés
     all_keywords = [kw for sublist in df["keywords"] if isinstance(sublist, list) for kw in sublist]
     if all_keywords:
         keywords_text = " ".join(all_keywords)
@@ -85,26 +107,18 @@ async def analyser_json(payload: JSONData):
     else:
         keywords_freq_b64 = ""
 
-    # Sentiments par auteur (graphique horizontal)
     author_sentiment = df.groupby(['authorName', 'sentimentHumanReadable']).size().unstack(fill_value=0)
-    # Calcul du total d’articles par auteur
     author_sentiment['Total'] = author_sentiment.sum(axis=1)
-    # Récupérer les 10 auteurs les plus actifs
     top_authors_sentiment = author_sentiment.sort_values(by='Total', ascending=False).head(10).drop(columns='Total')
-    # Ordre décroissant des auteurs (le plus actif en haut)
     top_authors_sentiment = top_authors_sentiment.iloc[::-1]
-    # Génération du graphique horizontal empilé
     fig3, ax3 = plt.subplots(figsize=(10, 6))
     top_authors_sentiment.plot(kind='barh', stacked=True, ax=ax3, color="#2F6690")
     ax3.set_xlabel("Nombre d'articles")
     ax3.set_ylabel("Auteur")
     ax3.set_title("Répartition des sentiments par auteur")
-    # Encodage base64
     sentiments_auteurs_b64 = fig_to_base64(fig3)
     plt.close(fig3)
 
-
-    # Tableau top auteurs
     top_table = (
         df["authorName"]
         .value_counts()
@@ -114,7 +128,6 @@ async def analyser_json(payload: JSONData):
         .to_html(index=False, border=1, classes="styled-table")
     )
 
-    # HTML final
     html_report = f"""<!DOCTYPE html>
 <html lang='fr'>
 <head>
@@ -134,10 +147,12 @@ async def analyser_json(payload: JSONData):
     <h1>📊 Rapport d'Analyse de Veille Médiatique</h1>
     <div class="centered-text">
         <p>
-            Ce rapport de veille médiatique fournit une analyse approfondie des articles collectés depuis la plateforme Lumenfeed. 
-            Il vise à offrir une vision claire et synthétique de la couverture médiatique d’un sujet donné, en mettant en évidence 
-            les volumes de publication, les auteurs les plus actifs, et les principaux mots-clés abordés. 
+            Ce rapport de veille médiatique fournit une analyse approfondie des articles collectés depuis la plateforme Lumenfeed.
+            Il vise à offrir une vision claire et synthétique de la couverture médiatique d’un sujet donné, en mettant en évidence
+            les volumes de publication, les auteurs les plus actifs, et les principaux mots-clés abordés.
         </p>
+        <h2>Résumé du sujet analysé</h2>
+        <p>{resume_sujet}</p>
     </div>
     <h2>Indicateurs Clés</h2>
     <div style="display: flex; justify-content: space-around; margin: 20px 0;">
@@ -163,7 +178,6 @@ async def analyser_json(payload: JSONData):
 </body>
 </html>
 """
-
     os.makedirs("static", exist_ok=True)
     with open("static/rapport_veille.html", "w", encoding="utf-8") as f:
         f.write(html_report)
