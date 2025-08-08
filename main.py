@@ -10,7 +10,7 @@ import base64
 import os
 from datetime import datetime
 
-# === Résumé avec sumy ===
+# Résumé avec Sumy
 from sumy.parsers.plaintext import PlaintextParser
 from sumy.nlp.tokenizers import Tokenizer
 from sumy.summarizers.lsa import LsaSummarizer
@@ -48,26 +48,37 @@ class Article(BaseModel):
 class JSONData(BaseModel):
     data: list[Article]
 
-# Fonction de résumé
+# Fonction de résumé automatique
 def generer_resume(df, nb_phrases=3):
-    textes = df['content_excerpt'].dropna().astype(str).tolist()
-    texte_complet = " ".join(textes)
-    if not texte_complet.strip():
+    textes = df["content_excerpt"].dropna().astype(str).tolist()
+    texte_complet = " ".join(textes).strip()
+
+    if not texte_complet:
         return "Le contenu des articles ne permet pas de générer un résumé."
 
-    parser = PlaintextParser.from_string(texte_complet, Tokenizer("french"))
-    summarizer = LsaSummarizer()
-    resume = summarizer(parser.document, nb_phrases)
-    return " ".join(str(phrase) for phrase in resume)
+    # Limiter à 10000 caractères pour éviter les erreurs de parsing
+    texte_complet = texte_complet[:10000]
 
-# Route d’analyse
+    try:
+        parser = PlaintextParser.from_string(texte_complet, Tokenizer("french"))
+        summarizer = LsaSummarizer()
+        resume = summarizer(parser.document, nb_phrases)
+        return " ".join(str(sentence) for sentence in resume) or "Résumé non disponible."
+    except Exception:
+        return "Erreur lors de la génération du résumé."
+
+# Route POST principale
 @app.post("/analyser_json")
 async def analyser_json(payload: JSONData):
     raw_data = payload.data
     df = pd.DataFrame([article.dict() for article in raw_data])
 
     df["articleCreatedDate"] = df["published_at"].apply(lambda ts: datetime.utcfromtimestamp(ts))
-    df = df.rename(columns={"author": "authorName", "sentiment_label": "sentimentHumanReadable"})
+    df = df.rename(columns={
+        "author": "authorName",
+        "sentiment_label": "sentimentHumanReadable",
+        "content_excerpt": "content_excerpt"
+    })
 
     kpis = {
         "total_mentions": len(df),
@@ -105,7 +116,7 @@ async def analyser_json(payload: JSONData):
     author_sentiment = df.groupby(['authorName', 'sentimentHumanReadable']).size().unstack(fill_value=0)
     author_sentiment['Total'] = author_sentiment.sum(axis=1)
     top_authors_sentiment = author_sentiment.sort_values(by='Total', ascending=False).head(10).drop(columns='Total')
-    top_authors_sentiment = top_authors_sentiment.iloc[::-1]  # ordre décroissant (plus actif en haut)
+    top_authors_sentiment = top_authors_sentiment.iloc[::-1]
     fig3, ax3 = plt.subplots(figsize=(10, 6))
     top_authors_sentiment.plot(kind='barh', stacked=True, ax=ax3, color="#2F6690")
     ax3.set_xlabel("Nombre d'articles")
@@ -124,10 +135,10 @@ async def analyser_json(payload: JSONData):
         .to_html(index=False, border=1, classes="styled-table")
     )
 
-    # Résumé sémantique du sujet
+    # Résumé
     resume_sujet = generer_resume(df)
 
-    # HTML du rapport
+    # Rapport HTML
     html_report = f"""<!DOCTYPE html>
 <html lang='fr'>
 <head>
@@ -146,7 +157,7 @@ async def analyser_json(payload: JSONData):
 <body>
     <h1>📊 Rapport d'Analyse de Veille Médiatique</h1>
     <div class="centered-text">
-        <p>Ce rapport de veille médiatique fournit une analyse approfondie des articles collectés depuis la plateforme Lumenfeed.</p>
+        <p>Ce rapport fournit une analyse des articles collectés depuis la plateforme Lumenfeed.</p>
         <p><strong>Résumé du sujet analysé :</strong> {resume_sujet}</p>
     </div>
     <h2>Indicateurs Clés</h2>
