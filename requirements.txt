@@ -1,9 +1,11 @@
 fastapi
 uvicorn
-pandas
+pydantic
 matplotlib
-seaborn
+pandas
 python-multipart
-wordcloud
 transformers
 torch
+wordcloud
+scikit-learn
+nltk
