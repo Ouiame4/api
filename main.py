@@ -10,14 +10,15 @@ import base64
 import os
 from datetime import datetime
 
-# Résumé avec Sumy
-from sumy.parsers.plaintext import PlaintextParser
-from sumy.nlp.tokenizers import Tokenizer
-from sumy.summarizers.lsa import LsaSummarizer
-import nltk
-nltk.download('punkt', quiet=True)
+# Résumé avec modèle BART (Transformers)
+from transformers import pipeline, BartTokenizer, BartForConditionalGeneration
 
-# Initialisation FastAPI
+# Chargement du modèle Hugging Face
+tokenizer = BartTokenizer.from_pretrained("facebook/bart-large-cnn")
+model = BartForConditionalGeneration.from_pretrained("facebook/bart-large-cnn")
+summarizer = pipeline("summarization", model=model, tokenizer=tokenizer)
+
+# Initialisation de FastAPI
 app = FastAPI(title="API Analyse Veille Médiatique")
 
 # Middleware CORS
@@ -28,7 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Encodage image en base64
+# Fonction d'encodage d’un graphique en base64
 def fig_to_base64(fig):
     buf = BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight")
@@ -48,37 +49,27 @@ class Article(BaseModel):
 class JSONData(BaseModel):
     data: list[Article]
 
-# Fonction de résumé automatique
-def generer_resume(df, nb_phrases=3):
-    textes = df["content_excerpt"].dropna().astype(str).tolist()
-    texte_complet = " ".join(textes).strip()
+# Fonction de résumé sémantique
+def generer_resume_semantique(df, max_len=130, min_len=40):
+    texts = df['content_excerpt'].dropna().astype(str).tolist()
+    full_text = " ".join(texts)
+    if not full_text.strip():
+        return "Le contenu ne permet pas de générer un résumé."
 
-    if not texte_complet:
-        return "Le contenu des articles ne permet pas de générer un résumé."
+    # Tronquer à 1024 tokens (limite max de BART)
+    max_input_length = 1024
+    tokens = tokenizer(full_text, return_tensors="pt", truncation=True, max_length=max_input_length)
+    summary_ids = model.generate(tokens["input_ids"], num_beams=4, max_length=max_len, min_length=min_len, early_stopping=True)
+    resume = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+    return resume
 
-    # Limiter à 10000 caractères pour éviter les erreurs de parsing
-    texte_complet = texte_complet[:10000]
-
-    try:
-        parser = PlaintextParser.from_string(texte_complet, Tokenizer("french"))
-        summarizer = LsaSummarizer()
-        resume = summarizer(parser.document, nb_phrases)
-        return " ".join(str(sentence) for sentence in resume) or "Résumé non disponible."
-    except Exception:
-        return "Erreur lors de la génération du résumé."
-
-# Route POST principale
 @app.post("/analyser_json")
 async def analyser_json(payload: JSONData):
     raw_data = payload.data
     df = pd.DataFrame([article.dict() for article in raw_data])
 
     df["articleCreatedDate"] = df["published_at"].apply(lambda ts: datetime.utcfromtimestamp(ts))
-    df = df.rename(columns={
-        "author": "authorName",
-        "sentiment_label": "sentimentHumanReadable",
-        "content_excerpt": "content_excerpt"
-    })
+    df = df.rename(columns={"author": "authorName", "sentiment_label": "sentimentHumanReadable"})
 
     kpis = {
         "total_mentions": len(df),
@@ -112,7 +103,7 @@ async def analyser_json(payload: JSONData):
     else:
         keywords_freq_b64 = ""
 
-    # Répartition des sentiments par auteur
+    # Sentiments par auteur
     author_sentiment = df.groupby(['authorName', 'sentimentHumanReadable']).size().unstack(fill_value=0)
     author_sentiment['Total'] = author_sentiment.sum(axis=1)
     top_authors_sentiment = author_sentiment.sort_values(by='Total', ascending=False).head(10).drop(columns='Total')
@@ -125,7 +116,7 @@ async def analyser_json(payload: JSONData):
     sentiments_auteurs_b64 = fig_to_base64(fig3)
     plt.close(fig3)
 
-    # Tableau top auteurs
+    # Top auteurs (tableau)
     top_table = (
         df["authorName"]
         .value_counts()
@@ -135,10 +126,13 @@ async def analyser_json(payload: JSONData):
         .to_html(index=False, border=1, classes="styled-table")
     )
 
-    # Résumé
-    resume_sujet = generer_resume(df)
+    # Résumé IA du sujet
+    try:
+        resume_sujet = generer_resume_semantique(df)
+    except Exception as e:
+        resume_sujet = f"Erreur lors de la génération du résumé : {e}"
 
-    # Rapport HTML
+    # HTML final
     html_report = f"""<!DOCTYPE html>
 <html lang='fr'>
 <head>
@@ -157,7 +151,7 @@ async def analyser_json(payload: JSONData):
 <body>
     <h1>📊 Rapport d'Analyse de Veille Médiatique</h1>
     <div class="centered-text">
-        <p>Ce rapport fournit une analyse des articles collectés depuis la plateforme Lumenfeed.</p>
+        <p>Ce rapport fournit une analyse approfondie des articles collectés depuis la plateforme Lumenfeed.</p>
         <p><strong>Résumé du sujet analysé :</strong> {resume_sujet}</p>
     </div>
     <h2>Indicateurs Clés</h2>
@@ -194,7 +188,6 @@ async def analyser_json(payload: JSONData):
         "html_report": html_report
     }
 
-# Route GET pour consulter le rapport
 @app.get("/rapport")
 def get_rapport():
     return FileResponse("static/rapport_veille.html", media_type="text/html")
