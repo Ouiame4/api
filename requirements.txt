@@ -2,10 +2,8 @@ fastapi
 uvicorn
 pydantic
 matplotlib
+seaborn
 pandas
 python-multipart
-transformers
-torch
 wordcloud
-scikit-learn
-nltk
+
