@@ -163,7 +163,6 @@ async def analyser_json(payload: JSONData):
 </body>
 </html>
 """
-
     os.makedirs("static", exist_ok=True)
     with open("static/rapport_veille.html", "w", encoding="utf-8") as f:
         f.write(html_report)
