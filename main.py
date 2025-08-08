@@ -4,20 +4,17 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 from wordcloud import WordCloud
 from io import BytesIO
 import base64
 import os
 from datetime import datetime
-from typing import List
 
-# Résumé avec transformers (distilbart-cnn)
-from transformers import pipeline
-
-# Initialisation FastAPI
+# Initialisation de l'app
 app = FastAPI(title="API Analyse Veille Médiatique")
 
-# CORS
+# Middleware CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -25,8 +22,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Résumé par pipeline Hugging Face (DistilBART)
-summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
+# Fonction d'encodage des graphiques
+def fig_to_base64(fig):
+    buf = BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode("utf-8")
 
 # Modèles Pydantic
 class Article(BaseModel):
@@ -36,29 +37,10 @@ class Article(BaseModel):
     sentiment_label: str
     title: str
     source_link: str
-    keywords: List[str] = []
+    keywords: list[str] = []
 
 class JSONData(BaseModel):
-    data: List[Article]
-
-# Fonction d'encodage d’image en base64
-def fig_to_base64(fig):
-    buf = BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight")
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode("utf-8")
-
-# Résumé sémantique via DistilBART
-def generer_resume_transformers(df):
-    texts = df['content_excerpt'].dropna().astype(str).tolist()
-    texte_concat = " ".join(texts)
-    texte_concat = texte_concat[:1024]  # Limite courte pour Render
-
-    try:
-        resume = summarizer(texte_concat, max_length=120, min_length=30, do_sample=False)
-        return resume[0]["summary_text"]
-    except Exception:
-        return "Résumé non disponible (erreur lors du traitement)."
+    data: list[Article]
 
 @app.post("/analyser_json")
 async def analyser_json(payload: JSONData):
@@ -68,7 +50,7 @@ async def analyser_json(payload: JSONData):
     df["articleCreatedDate"] = df["published_at"].apply(lambda ts: datetime.utcfromtimestamp(ts))
     df = df.rename(columns={
         "author": "authorName",
-        "sentiment_label": "sentimentHumanReadable"
+        "sentiment_label": "sentimentHumanReadable",
     })
 
     kpis = {
@@ -103,18 +85,24 @@ async def analyser_json(payload: JSONData):
     else:
         keywords_freq_b64 = ""
 
-    # Répartition des sentiments par auteur
+    # Sentiments par auteur (graphique horizontal)
     author_sentiment = df.groupby(['authorName', 'sentimentHumanReadable']).size().unstack(fill_value=0)
+    # Calcul du total d’articles par auteur
     author_sentiment['Total'] = author_sentiment.sum(axis=1)
+    # Récupérer les 10 auteurs les plus actifs
     top_authors_sentiment = author_sentiment.sort_values(by='Total', ascending=False).head(10).drop(columns='Total')
+    # Ordre décroissant des auteurs (le plus actif en haut)
     top_authors_sentiment = top_authors_sentiment.iloc[::-1]
+    # Génération du graphique horizontal empilé
     fig3, ax3 = plt.subplots(figsize=(10, 6))
     top_authors_sentiment.plot(kind='barh', stacked=True, ax=ax3, color="#2F6690")
     ax3.set_xlabel("Nombre d'articles")
     ax3.set_ylabel("Auteur")
     ax3.set_title("Répartition des sentiments par auteur")
+    # Encodage base64
     sentiments_auteurs_b64 = fig_to_base64(fig3)
     plt.close(fig3)
+
 
     # Tableau top auteurs
     top_table = (
@@ -126,10 +114,7 @@ async def analyser_json(payload: JSONData):
         .to_html(index=False, border=1, classes="styled-table")
     )
 
-    # Résumé sémantique du sujet
-    resume_sujet = generer_resume_transformers(df)
-
-    # Rapport HTML
+    # HTML final
     html_report = f"""<!DOCTYPE html>
 <html lang='fr'>
 <head>
@@ -148,8 +133,11 @@ async def analyser_json(payload: JSONData):
 <body>
     <h1>📊 Rapport d'Analyse de Veille Médiatique</h1>
     <div class="centered-text">
-        <p>Ce rapport fournit une analyse des articles collectés via la plateforme Lumenfeed.</p>
-        <p><strong>Résumé du sujet analysé :</strong> {resume_sujet}</p>
+        <p>
+            Ce rapport fournit une analyse approfondie des articles collectés depuis la plateforme Lumenfeed. 
+            Il vise à offrir une vision claire et synthétique de la couverture médiatique d’un sujet donné, en mettant en évidence 
+            les volumes de publication, les auteurs les plus actifs, et les principaux mots-clés abordés. 
+        </p>
     </div>
     <h2>Indicateurs Clés</h2>
     <div style="display: flex; justify-content: space-around; margin: 20px 0;">
@@ -173,7 +161,8 @@ async def analyser_json(payload: JSONData):
     <h2>Top 10 Auteurs les plus actifs</h2>
     {top_table}
 </body>
-</html>"""
+</html>
+"""
 
     os.makedirs("static", exist_ok=True)
     with open("static/rapport_veille.html", "w", encoding="utf-8") as f:
