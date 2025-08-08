@@ -6,3 +6,4 @@ seaborn
 python-multipart
 wordcloud
 transformers
+torch
