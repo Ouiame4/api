@@ -10,7 +10,6 @@ from io import BytesIO
 import base64
 import os
 from datetime import datetime
-from transformers import pipeline
 
 # Initialisation de l'app
 app = FastAPI(title="API Analyse Veille Médiatique")
@@ -22,9 +21,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Initialisation du modèle de résumé
-summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
 
 # Fonction d'encodage des graphiques
 def fig_to_base64(fig):
@@ -57,17 +53,6 @@ async def analyser_json(payload: JSONData):
         "sentiment_label": "sentimentHumanReadable",
     })
 
-    # Résumé avec IA
-    all_text = " ".join(df["content_excerpt"].dropna().astype(str).tolist())
-    resume = "Résumé du sujet non disponible."
-    if all_text.strip():
-        try:
-            summary_chunks = summarizer(all_text[:3000], max_length=120, min_length=40, do_sample=False)
-            resume = summary_chunks[0]['summary_text']
-        except Exception as e:
-            resume = f"Erreur lors de la génération du résumé : {str(e)}"
-
-    # KPIs
     kpis = {
         "total_mentions": len(df),
         "positive": int((df["sentimentHumanReadable"] == "positive").sum()),
@@ -79,10 +64,11 @@ async def analyser_json(payload: JSONData):
     df["Period"] = df["articleCreatedDate"].dt.date
     mentions_over_time = df["Period"].value_counts().sort_index()
     fig1, ax1 = plt.subplots(figsize=(10, 4))
-    ax1.plot(mentions_over_time.index.astype(str), mentions_over_time.values, marker='o', linestyle='-', color="#2F6690")
-    ax1.set_title("Évolution des mentions par jour")
-    ax1.set_ylabel("Mentions")
-    plt.xticks(rotation=45)
+    ax1.plot(mentions_over_time.index.astype(str), mentions_over_time.values, marker='o', linestyle='-', color="#023047")
+    ax1.set_title("Évolution des mentions par jour", color="#023047")
+    ax1.set_ylabel("Mentions", color="#023047")
+    plt.xticks(rotation=45, color="#023047")
+    plt.yticks(color="#023047")
     evolution_mentions_b64 = fig_to_base64(fig1)
     plt.close(fig1)
 
@@ -94,22 +80,24 @@ async def analyser_json(payload: JSONData):
         fig_kw, ax_kw = plt.subplots(figsize=(10, 5))
         ax_kw.imshow(wordcloud, interpolation='bilinear')
         ax_kw.axis("off")
-        ax_kw.set_title("Mots-clés les plus fréquents", fontsize=16)
+        ax_kw.set_title("Mots-clés les plus fréquents", fontsize=16, color="#023047")
         keywords_freq_b64 = fig_to_base64(fig_kw)
         plt.close(fig_kw)
     else:
         keywords_freq_b64 = ""
 
-    # Sentiments par auteur
+    # Sentiments par auteur (graphique horizontal)
     author_sentiment = df.groupby(['authorName', 'sentimentHumanReadable']).size().unstack(fill_value=0)
     author_sentiment['Total'] = author_sentiment.sum(axis=1)
     top_authors_sentiment = author_sentiment.sort_values(by='Total', ascending=False).head(10).drop(columns='Total')
     top_authors_sentiment = top_authors_sentiment.iloc[::-1]
     fig3, ax3 = plt.subplots(figsize=(10, 6))
-    top_authors_sentiment.plot(kind='barh', stacked=True, ax=ax3, color="#2F6690")
-    ax3.set_xlabel("Nombre d'articles")
-    ax3.set_ylabel("Auteur")
-    ax3.set_title("Répartition des sentiments par auteur")
+    top_authors_sentiment.plot(kind='barh', stacked=True, ax=ax3, color="#023047")
+    ax3.set_xlabel("Nombre d'articles", color="#023047")
+    ax3.set_ylabel("Auteur", color="#023047")
+    ax3.set_title("Répartition des sentiments par auteur", color="#023047")
+    plt.xticks(color="#023047")
+    plt.yticks(color="#023047")
     sentiments_auteurs_b64 = fig_to_base64(fig3)
     plt.close(fig3)
 
@@ -130,12 +118,12 @@ async def analyser_json(payload: JSONData):
     <meta charset='UTF-8'>
     <title>Rapport de Veille Médiatique</title>
     <style>
-        body {{ font-family: Arial, sans-serif; padding: 40px; max-width: 900px; margin: auto; background-color: #f9f9f9; }}
-        h1, h2 {{ text-align: center; color: #2F6690; }}
-        .centered-text {{ max-width: 800px; margin: 0 auto 40px; text-align: center; font-size: 16px; line-height: 1.6; }}
-        .styled-table {{ border-collapse: collapse; margin: 25px auto; font-size: 16px; width: 80%; border: 1px solid #dddddd; }}
-        .styled-table th, .styled-table td {{ padding: 10px 15px; text-align: left; border: 1px solid #dddddd; }}
-        .styled-table thead th {{ background-color: #f3f3f3; font-weight: bold; }}
+        body {{ font-family: Arial, sans-serif; padding: 40px; max-width: 900px; margin: auto; background-color: #f9f9f9; color: #023047; }}
+        h1, h2 {{ text-align: center; color: #023047; }}
+        .centered-text {{ max-width: 800px; margin: 0 auto 40px; text-align: center; font-size: 16px; line-height: 1.6; color: #023047; }}
+        .styled-table {{ border-collapse: collapse; margin: 25px auto; font-size: 16px; width: 80%; border: 1px solid #023047; }}
+        .styled-table th, .styled-table td {{ padding: 10px 15px; text-align: left; border: 1px solid #023047; color: #023047; }}
+        .styled-table thead th {{ background-color: #e0e6ed; font-weight: bold; color: #023047; }}
         .image-block {{ text-align: center; margin: 30px 0; }}
     </style>
 </head>
@@ -148,16 +136,12 @@ async def analyser_json(payload: JSONData):
             les volumes de publication, les auteurs les plus actifs, et les principaux mots-clés abordés. 
         </p>
     </div>
-    <h2>Résumé du sujet analysé</h2>
-    <div class="centered-text">
-        <p>{resume}</p>
-    </div>
     <h2>Indicateurs Clés</h2>
     <div style="display: flex; justify-content: space-around; margin: 20px 0;">
-        <div style="text-align: center;"><h3>{kpis['total_mentions']}</h3><p>Mentions totales</p></div>
-        <div style="text-align: center;"><h3>{kpis['positive']}</h3><p>Positives</p></div>
-        <div style="text-align: center;"><h3>{kpis['negative']}</h3><p>Négatives</p></div>
-        <div style="text-align: center;"><h3>{kpis['neutral']}</h3><p>Neutres</p></div>
+        <div style="text-align: center;"><h3 style="color:#023047">{kpis['total_mentions']}</h3><p>Mentions totales</p></div>
+        <div style="text-align: center;"><h3 style="color:#023047">{kpis['positive']}</h3><p>Positives</p></div>
+        <div style="text-align: center;"><h3 style="color:#023047">{kpis['negative']}</h3><p>Négatives</p></div>
+        <div style="text-align: center;"><h3 style="color:#023047">{kpis['neutral']}</h3><p>Neutres</p></div>
     </div>
     <div class="image-block">
         <h2>Évolution des mentions</h2>
@@ -181,7 +165,6 @@ async def analyser_json(payload: JSONData):
         f.write(html_report)
 
     return {
-        "resume": resume,
         "kpis": kpis,
         "html_report": html_report
     }
