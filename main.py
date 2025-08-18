@@ -10,6 +10,7 @@ from io import BytesIO
 import base64
 import os
 from datetime import datetime
+from matplotlib.colors import LinearSegmentedColormap
 
 # Initialisation de l'app
 app = FastAPI(title="API Analyse Veille Médiatique")
@@ -72,11 +73,12 @@ async def analyser_json(payload: JSONData):
     evolution_mentions_b64 = fig_to_base64(fig1)
     plt.close(fig1)
 
-    # WordCloud des mots-clés
+    # WordCloud des mots-clés (couleur homogène #023047)
     all_keywords = [kw for sublist in df["keywords"] if isinstance(sublist, list) for kw in sublist]
     if all_keywords:
         keywords_text = " ".join(all_keywords)
-        wordcloud = WordCloud(width=800, height=400, background_color="white", colormap='Blues').generate(keywords_text)
+        custom_cmap = LinearSegmentedColormap.from_list("custom_blue", ["#023047", "#023047"])
+        wordcloud = WordCloud(width=800, height=400, background_color="white", colormap=custom_cmap).generate(keywords_text)
         fig_kw, ax_kw = plt.subplots(figsize=(10, 5))
         ax_kw.imshow(wordcloud, interpolation='bilinear')
         ax_kw.axis("off")
@@ -128,7 +130,7 @@ async def analyser_json(payload: JSONData):
     </style>
 </head>
 <body>
-    <h1>📊 Rapport d'Analyse de Veille Médiatique</h1>
+    <h1>📊 Rapport Stratégique de Veille Médiatique</h1>
     <div class="centered-text">
         <p>
             Ce rapport fournit une analyse approfondie des articles collectés depuis la plateforme Lumenfeed. 
