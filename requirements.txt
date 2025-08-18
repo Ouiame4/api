@@ -6,3 +6,5 @@ seaborn
 pandas
 python-multipart
 wordcloud
+transformers==4.40.0
+torch --index-url https://download.pytorch.org/whl/cpu
