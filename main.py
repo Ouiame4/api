@@ -10,6 +10,7 @@ from io import BytesIO
 import base64
 import os
 from datetime import datetime
+from transformers import pipeline
 
 # Initialisation de l'app
 app = FastAPI(title="API Analyse Veille Médiatique")
@@ -21,6 +22,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Initialisation du modèle de résumé
+summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
 
 # Fonction d'encodage des graphiques
 def fig_to_base64(fig):
@@ -53,6 +57,17 @@ async def analyser_json(payload: JSONData):
         "sentiment_label": "sentimentHumanReadable",
     })
 
+    # Résumé avec IA
+    all_text = " ".join(df["content_excerpt"].dropna().astype(str).tolist())
+    resume = "Résumé du sujet non disponible."
+    if all_text.strip():
+        try:
+            summary_chunks = summarizer(all_text[:3000], max_length=120, min_length=40, do_sample=False)
+            resume = summary_chunks[0]['summary_text']
+        except Exception as e:
+            resume = f"Erreur lors de la génération du résumé : {str(e)}"
+
+    # KPIs
     kpis = {
         "total_mentions": len(df),
         "positive": int((df["sentimentHumanReadable"] == "positive").sum()),
@@ -85,24 +100,18 @@ async def analyser_json(payload: JSONData):
     else:
         keywords_freq_b64 = ""
 
-    # Sentiments par auteur (graphique horizontal)
+    # Sentiments par auteur
     author_sentiment = df.groupby(['authorName', 'sentimentHumanReadable']).size().unstack(fill_value=0)
-    # Calcul du total d’articles par auteur
     author_sentiment['Total'] = author_sentiment.sum(axis=1)
-    # Récupérer les 10 auteurs les plus actifs
     top_authors_sentiment = author_sentiment.sort_values(by='Total', ascending=False).head(10).drop(columns='Total')
-    # Ordre décroissant des auteurs (le plus actif en haut)
     top_authors_sentiment = top_authors_sentiment.iloc[::-1]
-    # Génération du graphique horizontal empilé
     fig3, ax3 = plt.subplots(figsize=(10, 6))
     top_authors_sentiment.plot(kind='barh', stacked=True, ax=ax3, color="#2F6690")
     ax3.set_xlabel("Nombre d'articles")
     ax3.set_ylabel("Auteur")
     ax3.set_title("Répartition des sentiments par auteur")
-    # Encodage base64
     sentiments_auteurs_b64 = fig_to_base64(fig3)
     plt.close(fig3)
-
 
     # Tableau top auteurs
     top_table = (
@@ -139,6 +148,10 @@ async def analyser_json(payload: JSONData):
             les volumes de publication, les auteurs les plus actifs, et les principaux mots-clés abordés. 
         </p>
     </div>
+    <h2>Résumé du sujet analysé</h2>
+    <div class="centered-text">
+        <p>{resume}</p>
+    </div>
     <h2>Indicateurs Clés</h2>
     <div style="display: flex; justify-content: space-around; margin: 20px 0;">
         <div style="text-align: center;"><h3>{kpis['total_mentions']}</h3><p>Mentions totales</p></div>
@@ -168,6 +181,7 @@ async def analyser_json(payload: JSONData):
         f.write(html_report)
 
     return {
+        "resume": resume,
         "kpis": kpis,
         "html_report": html_report
     }
