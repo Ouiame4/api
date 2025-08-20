@@ -109,7 +109,7 @@ async def analyser_json(payload: JSONData):
         .value_counts()
         .reset_index()
         .rename(columns={"index": "count", "authorName": "Auteur"})
-        .head(10)
+        .head(5)
         .to_html(index=False, border=1, classes="styled-table")
     )
 
@@ -157,7 +157,7 @@ async def analyser_json(payload: JSONData):
         <h2>Répartition des sentiments par auteur</h2>
         <img src="data:image/png;base64,{sentiments_auteurs_b64}" width="700"/>
     </div>
-    <h2>Top 10 Auteurs les plus actifs</h2>
+    <h2>Top 5 Auteurs les plus actifs</h2>
     {top_table}
 </body>
 </html>
