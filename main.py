@@ -10,6 +10,7 @@ import base64
 import os
 from datetime import datetime
 from collections import Counter
+from matplotlib.colors import LinearSegmentedColormap
 
 # Initialisation de l'app
 app = FastAPI(title="API Analyse Veille Médiatique")
@@ -77,7 +78,8 @@ async def analyser_json(payload: JSONData):
     if all_keywords:
         # Génération du WordCloud
         keywords_text = " ".join(all_keywords)
-        wordcloud = WordCloud(width=800, height=400, background_color="white", colormap='Blues').generate(keywords_text)
+        custom_cmap = LinearSegmentedColormap.from_list("custom_blue", ["#023047", "#023047"])
+        wordcloud = WordCloud(width=800, height=400, background_color="white", colormap=custom_cmap).generate(keywords_text)
         fig_kw, ax_kw = plt.subplots(figsize=(10, 5))
         ax_kw.imshow(wordcloud, interpolation='bilinear')
         ax_kw.axis("off")
