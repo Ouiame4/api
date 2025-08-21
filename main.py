@@ -130,12 +130,12 @@ async def analyser_json(payload: JSONData):
     <meta charset='UTF-8'>
     <title>📊 Rapport d'Analyse Automatisée de Veille Médiatique</title>
     <style>
-        body {{ font-family: Arial, sans-serif; padding: 40px; max-width: 900px; margin: auto; background-color: #f9f9f9; }}
+        body {{ font-family: Arial, sans-serif; padding: 40px; max-width: 900px; margin: auto; background-color: white; }}
         h1, h2 {{ text-align: center; color: #023047; }}
         .centered-text {{ max-width: 800px; margin: 0 auto 40px; text-align: center; font-size: 16px; line-height: 1.6; }}
         .styled-table {{ border-collapse: collapse; margin: 25px auto; font-size: 16px; width: 80%; border: 1px solid #dddddd; }}
         .styled-table th, .styled-table td {{ padding: 10px 15px; text-align: left; border: 1px solid #dddddd; }}
-        .styled-table thead th {{ background-color: #f3f3f3; font-weight: bold; }}
+        .styled-table thead th {{ background-color: white; font-weight: bold; }}
         .image-block {{ text-align: center; margin: 30px 0; }}
     </style>
 </head>
