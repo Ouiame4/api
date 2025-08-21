@@ -163,7 +163,6 @@ async def analyser_json(payload: JSONData):
         <h2>Mots-clés les plus fréquents</h2>
         <img src="data:image/png;base64,{keywords_freq_b64}" width="600"/>
     </div>
-    <h2>Résumé automatique</h2>
     <div class="centered-text">
         <p>{summary_text}</p>
     </div>
